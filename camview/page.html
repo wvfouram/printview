@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0a0b0d">
+<title>PrintView</title>
+<style>
+:root{--bg:#0a0b0d;--s1:#15171a;--s2:#1f2226;--line:#272a30;--tx:#f3f1ec;--mu:#8d929b;--fa:#5a5f68;
+--ac:#ffb224;--ok:#34d399;--bad:#ff5d55;--info:#60a5fa;--r:20px}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1280px;margin:0 auto;padding:14px 16px 40px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+header h1{font-size:22px;margin:0;font-weight:650;letter-spacing:-.01em;flex:1}
+#conn{font-size:13px;color:var(--mu)}
+.grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+.grid>*{min-width:0}
+@media(min-width:960px){.grid.unlocked{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}.grid.unlocked .camcol{position:sticky;top:14px}}
+.cam{position:relative;background:#000;border-radius:var(--r);overflow:hidden;aspect-ratio:16/9}
+.cam img{width:100%;height:100%;object-fit:contain;display:block}
+.cam .scrim{position:absolute;inset:0;background:linear-gradient(#0008,transparent 30%,transparent 70%,#0009);pointer-events:none}
+.pill{position:absolute;top:12px;left:12px;background:#000b;padding:6px 12px;border-radius:99px;font-size:12px;font-weight:650;letter-spacing:.07em}
+#live{left:auto;right:12px;color:#ff6b63}
+.cambtns{position:absolute;right:12px;bottom:12px;display:flex;gap:8px}
+.ib{width:42px;height:42px;border-radius:99px;border:0;background:#0009;display:grid;place-items:center;cursor:pointer}
+.ib:hover{background:#000c}.ib svg{width:22px;height:22px}
+.camover{position:absolute;left:16px;right:16px;bottom:14px;display:none;align-items:flex-end;gap:14px}
+.cam:fullscreen{border-radius:0;aspect-ratio:auto}
+.cam:fullscreen .camover{display:flex}.cam:fullscreen .cambtns{bottom:auto;top:12px;right:110px}
+.card{background:var(--s1);border-radius:var(--r);padding:18px}
+.card+.card{margin-top:12px}
+.h{font-size:11.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin:0 0 12px}
+.row{display:flex;align-items:center;gap:10px}.row.w{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.mu{color:var(--mu)}.fa{color:var(--fa)}.sm{font-size:13px}
+.bar{height:8px;background:var(--s2);border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;width:0;background:var(--ac);border-radius:99px;transition:width .4s}
+.big{font-size:52px;font-weight:300;line-height:1;letter-spacing:-.02em}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.stat{background:var(--s2);border-radius:14px;padding:10px 12px}.stat b{display:block;font-weight:550;font-size:17px;margin-top:3px}
+.btn{border:0;border-radius:14px;padding:13px 16px;font-weight:600;cursor:pointer;background:var(--s2);display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;transition:filter .15s}
+.btn:hover{filter:brightness(1.15)}.btn:disabled{opacity:.35;cursor:default;filter:none}
+.btn.pri{background:var(--ac);color:#1a1206}.btn.go{background:var(--ok);color:#06180f}.btn.bad{background:#ff5d551f;color:var(--bad)}
+.btn.sm{min-height:36px;padding:8px 12px;font-size:14px;border-radius:11px}
+.btn svg{width:18px;height:18px}
+.seg{display:flex;background:var(--s2);border-radius:14px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;background:transparent;color:var(--mu);padding:9px 6px;border-radius:11px;font-weight:550;cursor:pointer}
+.seg button.on{background:var(--line);color:var(--tx)}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:16px 0 12px;padding-bottom:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{border:0;background:var(--s1);color:var(--mu);padding:10px 16px;border-radius:99px;font-weight:550;white-space:nowrap;cursor:pointer}
+.tabs button.on{background:var(--tx);color:var(--bg)}
+.sw{position:relative;width:46px;height:28px;flex:none}.sw input{opacity:0;width:0;height:0}
+.sw span{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:.2s;cursor:pointer}
+.sw span:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:var(--mu);border-radius:50%;transition:.2s}
+.sw input:checked+span{background:#ffb22466}.sw input:checked+span:before{transform:translateX(18px);background:var(--ac)}
+.div{height:1px;background:var(--line);margin:16px 0}
+input[type=number],input[type=text],input[type=password],select,textarea{background:var(--s2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;outline:none;min-width:0}
+input:focus,select:focus,textarea:focus{border-color:var(--ac)}
+input[type=range]{width:100%;accent-color:var(--ac)}
+textarea{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:80px;resize:vertical}
+.ev{display:flex;gap:12px;padding-top:10px;align-items:flex-start}.ev i{width:7px;height:7px;border-radius:9px;margin-top:7px;flex:none;background:var(--fa)}
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.slot{background:var(--s2);border:2px solid transparent;border-radius:14px;padding:10px;cursor:pointer;text-align:left;color:inherit}
+.slot.on{border-color:var(--ac)}.slot.sel{border-color:var(--info)}
+.dot{width:22px;height:22px;border-radius:99px;border:2px solid #fff3;display:inline-block;vertical-align:middle}
+.list>*{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.list>*:first-child{border-top:0}
+.thumb{width:84px;height:56px;border-radius:10px;object-fit:cover;background:#000;flex:none}
+.pad{display:grid;grid-template-columns:repeat(3,52px);gap:6px}
+.pad .btn{min-height:52px;padding:0}
+.lock{max-width:420px;margin:16px auto 0;text-align:center}
+.lock input{font-size:26px;letter-spacing:.4em;text-align:center;width:100%;padding:14px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#2a2d33;padding:11px 18px;border-radius:99px;opacity:0;transition:.25s;pointer-events:none;z-index:9;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.hide{display:none!important}
+a{color:var(--info)}
+.chip{background:var(--s2);padding:5px 10px;border-radius:99px;font-size:12px;font-weight:600}
+dialog{background:var(--s1);color:var(--tx);border:0;border-radius:var(--r);padding:20px;max-width:min(440px,92vw);width:100%}
+dialog::backdrop{background:#000a}
+label.ck{display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer}
+label.ck input{width:18px;height:18px;accent-color:var(--ac)}
+/* view-only: everything visible, nothing changeable */
+.ro #views .btn,.ro #views input[type=number],.ro #views textarea,.ro #views label.ck input,.ro .ro-hide{display:none!important}
+.ro #views input,.ro #views select,.ro #views .seg,.ro #views .sw,.ro #views .slot{pointer-events:none}
+.ro #views .sw{opacity:.75}
+.robar{display:flex;align-items:center;gap:10px;background:var(--s1);border-radius:14px;padding:10px 14px;margin-top:14px;font-size:13px;color:var(--mu)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>PrintView</h1>
+    <span id="conn"></span>
+    <button class="btn sm hide" id="lockBtn" title="Lock this browser">Lock</button>
+  </header>
+
+  <div class="grid" id="grid">
+    <div class="camcol">
+      <div class="cam" id="cam">
+        <img id="img" alt="Printer camera">
+        <div class="scrim"></div>
+        <div class="pill" id="state">CONNECTING</div>
+        <div class="pill hide" id="live">● LIVE</div>
+        <div class="cambtns">
+          <button class="ib hide" id="lightBtn" title="Chamber light"></button>
+          <button class="ib" id="fsBtn" title="Full screen"></button>
+        </div>
+        <div class="camover" id="camover">
+          <div class="big num" id="fsPct">--%</div>
+          <div class="grow" style="padding-bottom:6px"><div class="num" id="fsLeft" style="font-weight:600"></div><div class="mu sm num" id="fsStats"></div></div>
+          <button class="btn pri hide" id="fsPause"></button>
+        </div>
+      </div>
+      <div class="lock card hide" id="lockCard">
+        <div class="h" style="margin-bottom:6px" id="lockTitle">Controls locked</div>
+        <div class="mu sm" style="margin-bottom:14px" id="lockMsg">Have the access code? Enter it to control the printer.</div>
+        <form id="loginForm"><input id="code" type="password" inputmode="numeric" autocomplete="current-password" maxlength="32" placeholder="••••••">
+        <button class="btn pri" style="width:100%;margin-top:10px">Unlock</button></form>
+        <div class="sm" id="loginMsg" style="color:var(--bad);margin-top:10px;min-height:1.4em"></div>
+      </div>
+    </div>
+
+    <div id="panel">
+      <div class="robar hide" id="robar"><span class="grow" id="roTxt">View only. You can see everything but can't change anything.</span><button class="btn sm pri" id="roCode">Enter code</button></div>
+      <div class="tabs" id="tabs"></div>
+      <div id="views"></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<dialog id="dlg"><div id="dlgBody"></div></dialog>
+
+<script>
+"use strict";
+const BASE = "__BASE__";
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const IC = {
+  pause:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg>',
+  stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
+  bulb:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="9.5" r="6"/><path d="M9.5 18.5h5M10.5 21.5h3"/></svg>',
+  bulbOn:'<svg viewBox="0 0 24 24" fill="#ffb224" stroke="#ffb224" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="9.5" r="6"/><path d="M9.5 18.5h5M10.5 21.5h3"/></svg>',
+  fs:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>',
+};
+$("#fsBtn").innerHTML = IC.fs;
+
+let unlocked = false, role = null, frozen = false, readOnly = true, status = null, tab = "watch", busy = false;
+let toastT;
+function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
+
+async function api(path, body) {
+  const o = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json", "X-PW": "1"}, body: JSON.stringify(body)};
+  let r;
+  try { r = await fetch(BASE + path, Object.assign({credentials: "same-origin", cache: "no-store"}, o)); }
+  catch (e) { throw new Error("Can't reach PrintView"); }
+  if (r.status === 401) { setUnlocked(false); throw new Error("Locked"); }
+  if (r.status === 423) { setFrozen(true); throw new Error("Controls are frozen by the owner"); }
+  const txt = await r.text();
+  let j; try { j = JSON.parse(txt); } catch (e) { j = {error: txt || ("HTTP " + r.status)}; }
+  if (!r.ok || (j && j.ok === false)) throw new Error((j && j.error) || ("HTTP " + r.status));
+  return j;
+}
+async function cmd(action, extra, okMsg) {
+  if (busy) return; busy = true;
+  try { await api("/api/cmd", Object.assign({action}, extra || {})); toast(okMsg || "Sent"); }
+  catch (e) { toast(e.message); }
+  finally { setTimeout(() => busy = false, 500); }
+}
+async function setting(obj, msg) { try { await api("/api/settings", obj); if (msg) toast(msg); } catch (e) { toast("Couldn't save: " + e.message); } }
+function confirmBox(title, msg, ok, fn, danger) {
+  const d = $("#dlg");
+  $("#dlgBody").innerHTML = `<div style="font-size:18px;font-weight:650;margin-bottom:8px">${esc(title)}</div><div class="mu" style="margin-bottom:18px;white-space:pre-line">${esc(msg)}</div>
+  <div class="row" style="justify-content:flex-end"><button class="btn sm" id="dNo">Cancel</button><button class="btn sm ${danger ? "bad" : "pri"}" id="dOk">${esc(ok)}</button></div>`;
+  $("#dNo").onclick = () => d.close();
+  $("#dOk").onclick = () => { d.close(); fn(); };
+  d.showModal();
+}
+
+// ------------------------------------------------------------ camera (works locked too)
+let lastFrame = 0, lastTag = "", lastUrl = null;
+// Asks every second, but only downloads a picture when the camera has a new one (the browser
+// sends the last picture's tag and the Pi answers "same as before" with no picture).
+async function camTick() {
+  try {
+    const r = await fetch(BASE + "/frame.jpg", {cache: "no-cache"});
+    if (!r.ok) throw new Error();
+    const tag = r.headers.get("ETag") || "";
+    if (tag !== lastTag || !lastUrl) {
+      const url = URL.createObjectURL(await r.blob());
+      $("#img").src = url;
+      if (lastUrl) URL.revokeObjectURL(lastUrl);
+      lastUrl = url; lastTag = tag;
+    }
+    lastFrame = Date.now(); $("#live").classList.remove("hide");
+    setTimeout(camTick, 1000);
+  } catch (e) {
+    if (Date.now() - lastFrame > 6000) { $("#live").classList.add("hide"); if (!unlocked) $("#state").textContent = "CAMERA OFFLINE"; }
+    setTimeout(camTick, 3000);
+  }
+}
+camTick();
+$("#fsBtn").onclick = () => {
+  const c = $("#cam");
+  if (document.fullscreenElement) document.exitFullscreen();
+  else (c.requestFullscreen || c.webkitRequestFullscreen).call(c).then(() => { try { screen.orientation.lock("landscape"); } catch (e) {} }).catch(() => {});
+};
+$("#lightBtn").onclick = () => { const on = status && status.printer.light; cmd(on ? "light_off" : "light_on", null, on ? "Light off" : "Light on"); };
+
+// ------------------------------------------------------------ lock / unlock
+function setUnlocked(v, r) {
+  unlocked = v;
+  if (r !== undefined) role = r;
+  if (!v) { role = null; frozen = false; }
+  const blocked = v && frozen && role !== "master";
+  const usable = v && !blocked;
+  $("#lockCard").classList.add("hide");          // opened from the "Enter code" button
+  $("#loginForm").classList.toggle("hide", blocked);
+  $("#lockTitle").textContent = blocked ? "Controls frozen" : "Controls locked";
+  $("#lockTitle").style.color = blocked ? "var(--bad)" : "";
+  $("#lockMsg").textContent = blocked ? "The owner has frozen controls. You can still see everything." : "Have the access code? Enter it to control the printer.";
+  readOnly = !usable;
+  document.body.classList.toggle("ro", readOnly);
+  $("#robar").classList.toggle("hide", !readOnly);
+  $("#roTxt").textContent = blocked ? "Frozen by the owner: view only for now." : "View only. You can see everything but can't change anything.";
+  $("#roCode").classList.toggle("hide", blocked);
+  $("#lockBtn").classList.toggle("hide", !v);
+  $("#lightBtn").classList.toggle("hide", !usable);
+  $("#grid").classList.add("unlocked");
+  if (!usable) $("#fsPause").classList.add("hide");
+  if (!tabList().some(t => t[0] === tab)) tab = "watch";
+  renderTabs(); poll();
+}
+function setFrozen(f) {
+  if (f === frozen) return;
+  frozen = f;
+  if (role !== "master") setUnlocked(unlocked);
+}
+// frozen or not, keep checking so controls come back by themselves when unfrozen
+setInterval(async () => {
+  if (!unlocked || role === "master") return;
+  try { const me = await (await fetch(BASE + "/me", {cache: "no-store"})).json(); if (!me.unlocked) setUnlocked(false); else setFrozen(!!me.frozen); } catch (e) {}
+}, 8000);
+$("#loginForm").onsubmit = async e => {
+  e.preventDefault();
+  $("#loginMsg").textContent = "";
+  try { const j = await api("/login", {code: $("#code").value}); $("#code").value = ""; const me = await (await fetch(BASE + "/me", {cache: "no-store"})).json(); frozen = !!me.frozen; setUnlocked(true, j.role); if (j.role === "master") toast("Master access"); }
+  catch (err) { $("#loginMsg").textContent = err.message; }
+};
+$("#roCode").onclick = () => { const c = $("#lockCard"); c.classList.toggle("hide"); if (!c.classList.contains("hide")) { c.scrollIntoView({behavior: "smooth", block: "center"}); $("#code").focus(); } };
+$("#lockBtn").onclick = async () => { try { await api("/logout", {}); } catch (e) {} setUnlocked(false); };
+
+// ------------------------------------------------------------ status polling
+let pollT, pollGen = 0;
+async function poll() {
+  clearTimeout(pollT);
+  const me = ++pollGen;                       // only one polling loop at a time
+  try { const st = await api("/api/status"); if (me !== pollGen) return; status = st; render(); }
+  catch (e) { if (me !== pollGen) return; $("#conn").textContent = "● Offline"; $("#conn").style.color = "var(--bad)"; }
+  pollT = setTimeout(poll, document.hidden ? 5000 : 1500);
+}
+const STATES = {RUNNING:["PRINTING","#34d399"],PAUSE:["PAUSED","#ffb224"],PREPARE:["PREPARING","#60a5fa"],SLICING:["PREPARING","#60a5fa"],
+  FINISH:["FINISHED","#34d399"],FAILED:["STOPPED","#ff5d55"],IDLE:["IDLE","#8d929b"]};
+const mins = m => m == null || m < 0 ? "--" : (m >= 60 ? Math.floor(m / 60) + "h " + String(Math.floor(m % 60)).padStart(2, "0") + "m" : Math.floor(m) + "m");
+const deg = (v, t) => v == null ? "--" : Math.round(v) + "°" + (t > 0 ? " / " + Math.round(t) + "°" : "");
+const active = s => ["RUNNING", "PAUSE", "PREPARE"].includes(s);
+
+function render() {
+  const s = status, p = s.printer, cm = s.camera;
+  const st = STATES[p.state] || [p.state, "#8d929b"];
+  $("#state").textContent = p.connected ? "● " + st[0] : "● PRINTER OFFLINE";
+  $("#state").style.color = p.connected ? st[1] : "var(--bad)";
+  $("#conn").textContent = p.connected && cm.connected ? "● Connected" : "● " + (!p.connected ? "Printer offline" : "Camera offline");
+  $("#conn").style.color = p.connected && cm.connected ? "var(--ok)" : "var(--bad)";
+  $("#lightBtn").innerHTML = p.light ? IC.bulbOn : IC.bulb;
+  const pct = p.percent != null && p.state !== "IDLE" ? p.percent + "%" : "--%";
+  $("#fsPct").textContent = pct;
+  $("#fsLeft").textContent = active(p.state) ? mins(p.remaining_min) + " left" + (p.job ? " · " + p.job : "") : (p.job || "");
+  $("#fsStats").textContent = `Layer ${p.layer != null && p.total_layers ? p.layer + "/" + p.total_layers : "--"} · Nozzle ${deg(p.nozzle, p.nozzle_target)} · Bed ${deg(p.bed, p.bed_target)}`;
+  bedServo(s.bedctl);
+  hmsBox(s.hms);
+  const fp = $("#fsPause");
+  fp.classList.toggle("hide", readOnly || !(p.state === "RUNNING" || p.state === "PAUSE"));
+  fp.className = "btn " + (p.state === "PAUSE" ? "go" : "pri") + (fp.classList.contains("hide") ? " hide" : "");
+  fp.innerHTML = p.state === "PAUSE" ? IC.play + "Resume" : IC.pause + "Pause";
+  fp.onclick = () => cmd(p.state === "PAUSE" ? "resume" : "pause", null, p.state === "PAUSE" ? "Resuming..." : "Pausing...");
+  const v = VIEWS[tab];
+  if (v && v.update) v.update(s);
+}
+
+// bed servo (Arduino) status: a line under the stats, and a red banner on every tab when heating is cut
+function hmsBox(h) {
+  const items = (h && h.items) || [];
+  let box = $("#hmsBox");
+  if (!box) {
+    box = document.createElement("div"); box.id = "hmsBox";
+    box.style.cssText = "border:1px solid var(--bad);border-radius:12px;padding:10px 14px;margin-top:14px";
+    $("#tabs").parentNode.insertBefore(box, $("#tabs"));
+  }
+  box.style.display = items.length ? "" : "none";
+  const e = t => String(t).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  box.innerHTML = items.length ? `<div style="font-weight:700;margin-bottom:4px">Printer errors (${items.length})</div>` + items.map(i =>
+    `<div style="padding:6px 0;border-top:1px solid rgba(255,255,255,.08)"><div style="font-size:12px;opacity:.7"><b style="color:var(--bad)">${e(i.level)}</b> · ${i.url ? `<a href="${i.url}" target="_blank" rel="noopener" style="color:inherit">HMS_${e(i.code)}</a>` : e(i.code)}</div><div style="font-size:14px">${e(i.text)}</div></div>`).join("") : "";
+}
+function bedServo(b) { window._bc = b;
+  let ban = $("#bcBan");
+  if (!ban) {
+    ban = document.createElement("div"); ban.id = "bcBan";
+    ban.style.cssText = "background:var(--bad);color:#fff;border-radius:12px;padding:10px 14px;margin-top:14px;font-weight:600;font-size:14px";
+    $("#tabs").parentNode.insertBefore(ban, $("#tabs"));
+  }
+  if (!b || !b.enabled) { ban.classList.add("hide"); return; }
+  const msg = b.fault ? "Bed servo FAULT (heating held off): " + b.fault : b.alert && b.bed_target > 0 ? "Bed heating off: " + b.alert : "";
+  ban.textContent = msg; ban.classList.toggle("hide", !msg);
+  $("#fsStats").textContent += ` · Bed servo ${b.fault ? "FAULT" : b.state === "close" ? "🔥 heating" : "🧊 off"}${b.uno ? "" : " (Uno no reply)"}`;
+}
+
+// ------------------------------------------------------------ tabs
+const VIEWS = {};
+const TABS = [["watch", "Watch"], ["controls", "Controls"], ["ams", "AMS"], ["print", "Print from SD"], ["job", "Current job"], ["timelapses", "Timelapses"], ["train", "Train"]];
+const RO_TABS = [["watch", "Watch"], ["controls", "Settings"], ["ams", "AMS"], ["job", "Current job"]];
+function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Command center"]]) : TABS; }
+function renderTabs() {
+  const tabs = tabList();
+  $("#tabs").innerHTML = tabs.map(([k, n]) => `<button data-k="${k}" class="${k === tab ? "on" : ""}"${k === "admin" ? ' style="color:var(--ac)"' : ""}>${n}</button>`).join("");
+  $("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => { tab = b.dataset.k; renderTabs(); });
+  const v = VIEWS[tab];
+  $("#views").innerHTML = "";
+  const el = document.createElement("div");
+  $("#views").appendChild(el);
+  v.build(el);
+  if (status && v.update) v.update(status);
+}
+
+// ---------- Watch
+VIEWS.watch = {
+  build(el) {
+    el.innerHTML = `
+    <div class="card">
+      <div class="mu" id="wJob" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No active print</div>
+      <div class="row" style="align-items:flex-end;margin-top:6px"><div class="big num grow" id="wPct">--%</div>
+        <div style="text-align:right;padding-bottom:6px"><div class="num" id="wRem" style="font-size:20px;font-weight:600">--</div><div class="mu sm" id="wEta">remaining</div></div></div>
+      <div class="bar" style="margin-top:12px"><i id="wBar"></i></div>
+      <div class="stats"><div class="stat"><span class="mu sm">Layer</span><b class="num" id="wLayer">--</b></div>
+        <div class="stat"><span class="mu sm">Nozzle</span><b class="num" id="wNoz">--</b></div>
+        <div class="stat"><span class="mu sm">Bed</span><b class="num" id="wBed">--</b></div></div>
+      <div class="row" style="margin-top:14px"><button class="btn pri grow" id="wPause" style="flex:2"></button><button class="btn bad grow" id="wStop">${IC.stop}Stop</button></div>
+    </div>
+    <div class="card">
+      <div class="row"><div class="h grow" style="margin:0">Spaghetti watch</div><span class="chip" id="wWatch">-</span></div>
+      <div class="bar" style="margin-top:14px"><i id="wScore" style="background:var(--ok)"></i></div>
+      <div class="row fa sm" style="margin-top:6px"><span class="grow">Clean</span><span>Pause</span></div>
+      <div class="div"></div>
+      <div class="row"><div class="grow"><div style="font-weight:600">Auto-pause</div><div class="mu sm">Pause the print when a failure is detected</div></div>
+        <label class="sw"><input type="checkbox" id="wAuto"><span></span></label></div>
+      <div class="div"></div>
+      <div style="font-weight:600;margin-bottom:10px">Sensitivity</div>
+      <div class="seg" id="wSens"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
+      <div class="mu sm ro-hide" id="wModel" style="margin-top:12px;white-space:pre-line"></div>
+    </div>
+    <div class="card ro-hide"><div class="h">Activity</div><div id="wEvents"></div></div>`;
+    $("#wStop").onclick = () => confirmBox("Stop this print?", "This cancels the job on the printer. It can't be resumed.", "Stop print", () => cmd("stop", {confirm: "STOP"}, "Stopping..."), true);
+    $("#wAuto").onchange = e => setting({auto_pause: e.target.checked}, e.target.checked ? "Auto-pause on" : "Auto-pause off");
+    el.querySelectorAll("#wSens button").forEach(b => b.onclick = () => { paintSeg("#wSens", b.dataset.v); setting({sensitivity: b.dataset.v}); });
+  },
+  update(s) {
+    const p = s.printer, d = s.detector || {}, act = active(p.state);
+    $("#wJob").textContent = p.job || (act ? "Print" : "No active print");
+    $("#wJob").style.color = p.job || act ? "var(--tx)" : "";
+    const has = p.percent != null && p.state !== "IDLE";
+    $("#wPct").textContent = has ? p.percent + "%" : "--%";
+    $("#wBar").style.width = (has ? p.percent : 0) + "%";
+    $("#wBar").style.background = p.state === "FAILED" ? "var(--bad)" : p.state === "FINISH" ? "var(--ok)" : "var(--ac)";
+    $("#wRem").textContent = act ? mins(p.remaining_min) : "--";
+    $("#wEta").textContent = act && p.remaining_min > 0 ? "Done at " + new Date(Date.now() + p.remaining_min * 60000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : "remaining";
+    $("#wLayer").textContent = p.layer != null && p.total_layers ? p.layer + " / " + p.total_layers : "--";
+    $("#wNoz").textContent = deg(p.nozzle, p.nozzle_target);
+    $("#wBed").textContent = deg(p.bed, p.bed_target) + (window._bc && window._bc.enabled ? (window._bc.state === "close" ? " 🔥" : " 🧊") : "");
+    const pb = $("#wPause"), paused = p.state === "PAUSE";
+    pb.className = "btn grow " + (paused ? "go" : "pri");
+    pb.innerHTML = paused ? IC.play + "Resume" : IC.pause + "Pause";
+    pb.disabled = !p.connected || !(paused || p.state === "RUNNING");
+    pb.onclick = () => cmd(paused ? "resume" : "pause", null, paused ? "Resuming..." : "Pausing...");
+    $("#wStop").disabled = !(p.connected && act);
+    const custom = d.mode === "custom";
+    let sc = custom ? d.custom_score : d.score; if (sc == null || isNaN(sc)) sc = 0;
+    const pa = custom ? (d.custom_pause_at ?? 0.8) : (d.pause_at ?? 0.78), wa = custom ? (d.custom_warn_at ?? 0.6) : (d.warn_at ?? 0.38);
+    const max = custom ? 1 : pa * 1.3, risk = sc >= pa ? "var(--bad)" : sc >= wa ? "var(--ac)" : "var(--ok)";
+    $("#wScore").style.width = Math.min(100, sc / max * 100) + "%";
+    $("#wScore").style.background = risk;
+    let ws = "Watching" + (d.infer_ms != null ? " · " + d.infer_ms + " ms" : ""), wc = risk;
+    if (!d.enabled) { ws = "Off"; wc = ""; }
+    else if (p.state !== "RUNNING") { ws = p.state === "PAUSE" ? "Paused" : "Idle"; wc = ""; }
+    else if (d.acted) { ws = "Failure flagged"; wc = "var(--bad)"; }
+    else if (d.warmup_s > 0) { ws = "Warming up " + Math.floor(d.warmup_s / 60) + ":" + String(d.warmup_s % 60).padStart(2, "0"); wc = ""; }
+    $("#wWatch").textContent = ws; $("#wWatch").style.color = wc;
+    if (s.settings) { $("#wAuto").checked = !!s.settings.auto_pause; paintSeg("#wSens", s.settings.sensitivity || "medium"); }
+    const tr = s.training;
+    if (tr) $("#wModel").textContent = (custom ? "Your model is in charge" + (tr.summary ? " · " + tr.summary : "") : tr.trained ? "Obico stock (your model is off)" : "Obico stock · label prints in Train to make yours")
+      + (tr.review > 0 ? "\n" + tr.review + " print" + (tr.review === 1 ? "" : "s") + " to review" : "");
+    const ev = s.events || [];
+    $("#wEvents").innerHTML = ev.length ? ev.slice(0, 10).map(e => {
+      const lo = (e.text || "").toLowerCase();
+      const c = /fail|stop|spaghetti/.test(lo) ? "var(--bad)" : /pause|warn/.test(lo) ? "var(--ac)" : /finish|done/.test(lo) ? "var(--ok)" : "";
+      return `<div class="ev"><i style="${c ? "background:" + c : ""}"></i><div class="grow">${esc(e.text)}</div><div class="fa sm num">${new Date(e.t * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}</div></div>`;
+    }).join("") : '<div class="mu" style="padding-top:8px">Nothing yet.</div>';
+  }
+};
+function paintSeg(sel, v) { document.querySelectorAll(sel + " button").forEach(b => b.classList.toggle("on", b.dataset.v == String(v))); }
+
+// ---------- Controls
+const FILAMENTS = [["PLA","PLA","PLA",190,230,"GFL99"],["PLA","PLA+ / PLA Pro","PLA",200,230,"GFL99"],["PLA","PLA Matte","PLA",190,230,"GFL99"],["PLA","PLA Silk","PLA",200,230,"GFL96"],["PLA","PLA Silk Dual/Tri Color","PLA",200,230,"GFL96"],["PLA","PLA High Speed","PLA",190,230,"GFL95"],["PLA","PLA Tough","PLA",200,230,"GFL99"],["PLA","PLA Translucent","PLA",190,230,"GFL99"],["PLA","PLA Glow in the Dark","PLA",190,230,"GFL99"],["PLA","PLA Sparkle / Galaxy","PLA",190,230,"GFL99"],["PLA","PLA Marble","PLA",190,230,"GFL99"],["PLA","PLA Wood","PLA",190,220,"GFL99"],["PLA","PLA Metal Fill","PLA",190,230,"GFL99"],["PLA","PLA Stone / Ceramic Fill","PLA",190,230,"GFL99"],["PLA","PLA Color Change (Thermo/UV)","PLA",190,220,"GFL99"],["PLA","PLA Heat Resistant (HTPLA)","PLA",200,230,"GFL99"],["PLA","PLA Lightweight / Aero (LW-PLA)","PLA-AERO",210,260,"GFL99"],["PLA","PLA-CF (Carbon Fiber)","PLA-CF",210,240,"GFL98"],["PLA","PLA-GF (Glass Fiber)","PLA-CF",210,240,"GFL98"],["PLA","Support for PLA","PLA-S",190,230,"GFL99"],["PETG","PETG","PETG",220,260,"GFG99"],["PETG","PETG HF (High Flow)","PETG",230,260,"GFG99"],["PETG","PETG Translucent","PETG",220,260,"GFG99"],["PETG","PETG Matte","PETG",220,260,"GFG99"],["PETG","PETG-CF (Carbon Fiber)","PETG-CF",240,270,"GFG98"],["PETG","PETG-GF (Glass Fiber)","PETG-CF",240,270,"GFG98"],["PETG","CPE / Co-polyester","PETG",240,260,"GFG99"],["PETG","PCTG","PCTG",240,270,"GFG99"],["PETG","PET-CF","PET-CF",260,290,"GFG98"],["PETG","rPETG (Recycled)","PETG",220,250,"GFG99"],["ABS / ASA","ABS","ABS",240,270,"GFB99"],["ABS / ASA","ABS-GF (Glass Fiber)","ABS-GF",240,270,"GFB99"],["ABS / ASA","ABS-CF (Carbon Fiber)","ABS",240,270,"GFB99"],["ABS / ASA","ASA","ASA",240,270,"GFB98"],["ABS / ASA","ASA-CF (Carbon Fiber)","ASA-CF",250,280,"GFB98"],["ABS / ASA","ASA Aero (Lightweight)","ASA-AERO",240,280,"GFB98"],["ABS / ASA","HIPS","HIPS",230,260,"GFS98"],["ABS / ASA","PC-ABS","PC",250,280,"GFC99"],["PC","PC (Polycarbonate)","PC",260,290,"GFC99"],["PC","PC-CF (Carbon Fiber)","PC",260,290,"GFC99"],["PC","PC-FR (Flame Retardant)","PC",260,290,"GFC99"],["Nylon","PA (Nylon)","PA",260,290,"GFN99"],["Nylon","PA6","PA",260,290,"GFN99"],["Nylon","PA12","PA",250,280,"GFN99"],["Nylon","PA-CF (Nylon Carbon Fiber)","PA-CF",260,290,"GFN98"],["Nylon","PA6-CF","PA6-CF",260,290,"GFN98"],["Nylon","PA12-CF","PA-CF",260,290,"GFN98"],["Nylon","PA-GF (Nylon Glass Fiber)","PA-GF",260,290,"GFN98"],["Nylon","PA6-GF","PA6-GF",260,290,"GFN98"],["Nylon","PAHT-CF","PAHT-CF",260,290,"GFN98"],["Nylon","PPA-CF","PPA-CF",280,300,"GFN98"],["Nylon","PPA-GF","PPA-GF",280,300,"GFN98"],["Flexible","TPU 95A","TPU",200,240,"GFU99"],["Flexible","TPU 90A","TPU",200,230,"GFU99"],["Flexible","TPU 85A","TPU",200,230,"GFU99"],["Flexible","TPU 68D (Firm)","TPU",210,240,"GFU99"],["Flexible","TPU for AMS","TPU",220,240,"GFU99"],["Flexible","TPE","TPU",200,230,"GFU99"],["Flexible","TPC / Flex Co-polyester","TPU",210,240,"GFU99"],["Flexible","SBS","SBS",230,250,"GFG99"],["Engineering","PP (Polypropylene)","PP",220,250,""],["Engineering","PP-CF","PP-CF",230,260,""],["Engineering","PP-GF","PP-GF",230,260,""],["Engineering","PE (Polyethylene)","PE",230,260,""],["Engineering","PE-CF","PE-CF",240,270,""],["Engineering","EVA","EVA",190,220,""],["Engineering","PHA","PHA",190,220,"GFL99"],["Engineering","PVB (Polysmooth)","PVB",200,230,""],["Engineering","POM (Acetal)","POM",210,240,""],["Engineering","PMMA (Acrylic)","PMMA",240,260,""],["Support","PVA (Water Soluble)","PVA",190,230,"GFS99"],["Support","BVOH (Water Soluble)","BVOH",210,240,"GFS99"],["Support","HIPS (Limonene Soluble)","HIPS",230,260,"GFS98"],["Support","Breakaway Support","PLA-S",200,230,"GFL99"]];
+let selSlot = null, jogStep = 10;
+VIEWS.controls = {
+  build(el) {
+    el.innerHTML = `
+    <div class="card"><div class="h">Print speed</div>
+      <div class="seg" id="cSpeed"><button data-v="1">Silent</button><button data-v="2">Standard</button><button data-v="3">Sport</button><button data-v="4">Ludicrous</button></div></div>
+    <div class="card"><div class="h">Temperatures</div>
+      ${["nozzle", "bed"].map(t => `<div class="row" style="margin-bottom:10px"><div class="grow"><div style="font-weight:600">${t === "nozzle" ? "Nozzle" : "Bed"}</div>
+        <div class="mu sm num" id="cT_${t}">--</div></div>
+        <button class="btn sm" data-t="${t}" data-d="-5">−5</button><input type="number" id="cIn_${t}" style="width:76px" min="0"${t === "nozzle" ? ' max="300"' : ""}>
+        <button class="btn sm" data-t="${t}" data-d="5">+5</button><button class="btn sm pri" data-t="${t}" data-set="1">Set</button></div>`).join("")}
+      <div class="row w ro-hide"><button class="btn sm" data-pre="220,60">PLA</button><button class="btn sm" data-pre="240,70">PETG</button><button class="btn sm" data-pre="260,90">ABS</button><button class="btn sm" data-pre="225,45">TPU</button><button class="btn sm bad" data-pre="0,0">Cool down</button></div></div>
+    <div class="card"><div class="h">Fans</div>
+      ${[["part", "Part cooling"], ["aux", "Aux"], ["chamber", "Chamber"]].map(([k, n]) => `<div style="margin-bottom:8px"><div class="row"><span class="grow">${n}</span><span class="num mu" id="cF_${k}">--</span></div>
+        <input type="range" min="0" max="100" step="10" id="cR_${k}" data-fan="${k}"></div>`).join("")}</div>
+    <div class="card"><div class="row"><div class="h grow" style="margin:0">AMS</div><span class="mu sm" id="cAmsInfo"></span></div>
+      <div class="slots" id="cSlots" style="margin-top:12px"></div>
+      <div id="cSlotAct" class="row w hide" style="margin-top:12px"></div>
+      <div class="row w" style="margin-top:12px"><button class="btn sm" id="cUnload">Unload</button><button class="btn sm" id="cExt">Load external spool</button>
+        <button class="btn sm" id="cAmsRetry">Retry after AMS error</button></div>
+      <div class="div"></div>
+      ${[["startup_read", "Read RFID at power-on"], ["tray_read", "Read RFID when a spool is inserted"], ["remain_calc", "Estimate remaining filament"]].map(([k, n]) =>
+        `<div class="row" style="padding:4px 0"><span class="grow">${n}</span><label class="sw"><input type="checkbox" data-amsopt="${k}"><span></span></label></div>`).join("")}
+      <div class="mu sm" style="margin-top:8px">Drying can only be started from the printer's screen.</div></div>
+    <div class="card ro-hide"><div class="h">Move</div>
+      <div class="mu sm" id="cMoveLock" style="margin-bottom:10px"></div>
+      <div class="row w" style="gap:18px;align-items:flex-start">
+        <div class="pad">${["", "Y+", "", "X-", "home", "X+", "", "Y-", ""].map(k => k ? `<button class="btn" data-jog="${k}">${k === "home" ? "⌂" : k}</button>` : "<span></span>").join("")}</div>
+        <div style="display:grid;gap:6px"><button class="btn" data-jog="Z-" style="min-width:80px">Bed ↑</button><button class="btn" data-jog="Z+">Bed ↓</button></div>
+        <div style="display:grid;gap:6px"><div class="mu sm">Step (mm)</div><div class="seg" id="cStep"><button data-v="1">1</button><button data-v="10">10</button><button data-v="50">50</button></div>
+          <button class="btn sm" id="cMotors">Motors off</button>
+          <div class="row"><button class="btn sm" data-ex="10">Extrude 10</button><button class="btn sm" data-ex="-10">Retract 10</button></div></div></div></div>
+    <div class="card ro-hide"><div class="h">G-code console</div><textarea id="cG" placeholder="M105"></textarea>
+      <div class="row" style="margin-top:8px"><span class="mu sm grow">Moves are refused while printing.</span><button class="btn sm pri" id="cGo">Send</button></div></div>
+    <div class="card"><div class="h">Printer options</div>
+      <div class="row" style="padding:4px 0"><span class="grow">Auto-recover from step loss</span><label class="sw"><input type="checkbox" data-opt="auto_recovery"><span></span></label></div>
+      <div class="row" style="padding:4px 0"><span class="grow">AMS auto-refill</span><label class="sw"><input type="checkbox" data-opt="auto_switch_filament"><span></span></label></div></div>
+    <div class="card ro-hide"><div class="h">Calibration</div>
+      <label class="ck"><input type="checkbox" id="cbBed" checked>Bed leveling</label><label class="ck"><input type="checkbox" id="cbVib" checked>Vibration compensation</label>
+      <label class="ck"><input type="checkbox" id="cbMot">Motor noise cancellation</label>
+      <button class="btn sm pri" id="cCal" style="margin-top:8px">Start calibration</button></div>
+    <div class="card"><div class="h">Printer info</div><div id="cInfo" class="sm" style="line-height:1.8"></div></div>`;
+    el.querySelectorAll("#cSpeed button").forEach(b => b.onclick = () => { paintSeg("#cSpeed", b.dataset.v); cmd("speed", {level: +b.dataset.v}, "Speed: " + b.textContent); });
+    el.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+      const t = b.dataset.t, inp = $("#cIn_" + t);
+      if (b.dataset.d) { inp.value = Math.max(0, (+inp.value || 0) + +b.dataset.d); inp.dataset.touched = "1"; return; }
+      cmd("temp", {target: t, value: +inp.value || 0}, (t === "nozzle" ? "Nozzle" : "Bed") + " → " + (+inp.value || 0) + "°"); inp.dataset.touched = "";
+    });
+    el.querySelectorAll("input[type=number]").forEach(i => i.oninput = () => i.dataset.touched = "1");
+    el.querySelectorAll("[data-pre]").forEach(b => b.onclick = async () => {
+      const [n, bd] = b.dataset.pre.split(",").map(Number);
+      await cmd("temp", {target: "nozzle", value: n}, "Sent"); busy = false; await cmd("temp", {target: "bed", value: bd}, b.textContent + ": " + n + "° / " + bd + "°");
+    });
+    el.querySelectorAll("[data-fan]").forEach(r => { r.oninput = () => $("#cF_" + r.dataset.fan).textContent = r.value + "%"; r.onchange = () => { r.dataset.touched = ""; busy = false; cmd("fan", {fan: r.dataset.fan, percent: +r.value}, "Fan set to " + r.value + "%"); }; r.onpointerdown = () => r.dataset.touched = "1"; });
+    $("#cUnload").onclick = () => confirmBox("Unload filament?", "The printer will cut and pull back the current filament.", "Unload", () => cmd("ams_unload", null, "Unloading..."));
+    $("#cExt").onclick = () => cmd("ams_load", {tray: 254}, "Loading external spool...");
+    $("#cAmsRetry").onclick = () => cmd("ams_resume", null, "Retrying AMS...");
+    el.querySelectorAll("[data-amsopt]").forEach(c => c.onchange = () => {
+      const g = k => $(`[data-amsopt=${k}]`).checked;
+      cmd("ams_options", {startup_read: g("startup_read"), tray_read: g("tray_read"), remain_calc: g("remain_calc")}, "AMS setting saved");
+    });
+    paintSeg("#cStep", jogStep);
+    el.querySelectorAll("#cStep button").forEach(b => b.onclick = () => { jogStep = +b.dataset.v; paintSeg("#cStep", jogStep); });
+    el.querySelectorAll("[data-jog]").forEach(b => b.onclick = () => {
+      const k = b.dataset.jog;
+      if (k === "home") return cmd("home", null, "Homing...");
+      busy = false; cmd("jog", {axis: k[0], mm: (k[1] === "-" ? -1 : 1) * jogStep}, k[0] + " " + k[1] + jogStep + " mm");
+    });
+    $("#cMotors").onclick = () => cmd("motors_off", null, "Motors off");
+    el.querySelectorAll("[data-ex]").forEach(b => b.onclick = () => cmd("extrude", {mm: +b.dataset.ex}, b.textContent));
+    $("#cGo").onclick = () => { const g = $("#cG").value.trim(); if (g) cmd("gcode", {gcode: g}, "G-code sent"); };
+    el.querySelectorAll("[data-opt]").forEach(c => c.onchange = () => cmd("option", {name: c.dataset.opt, value: c.checked}, "Option saved"));
+    $("#cCal").onclick = () => {
+      const bed = $("#cbBed").checked, vibration = $("#cbVib").checked, motor = $("#cbMot").checked;
+      confirmBox("Start calibration?", "The printer will move and heat up. Takes several minutes.", "Start", () => cmd("calibrate", {bed, vibration, motor}, "Calibration started"));
+    };
+  },
+  update(s) {
+    const p = s.printer;
+    if (p.speed_level) paintSeg("#cSpeed", p.speed_level);
+    for (const t of ["nozzle", "bed"]) {
+      $("#cT_" + t).textContent = deg(p[t], p[t + "_target"]);
+      const inp = $("#cIn_" + t);
+      if (!inp.dataset.touched && document.activeElement !== inp) inp.value = Math.round(p[t + "_target"] || 0);
+    }
+    for (const k of ["part", "aux", "chamber"]) {
+      const v = p.fans ? p.fans[k] : null, r = $("#cR_" + k);
+      if (!r.dataset.touched) { r.value = v || 0; $("#cF_" + k).textContent = v == null ? "--" : v + "%"; }
+    }
+    const a = p.ams || {}, units = a.units || [];
+    $("#cAmsInfo").textContent = units.map(u => `AMS ${u.unit}: ${u.temp != null ? Math.round(u.temp) + "° · " : ""}${u.humidity_pct != null ? u.humidity_pct + "% RH" : u.humidity_level != null ? "humidity " + u.humidity_level + "/5" : ""}${u.drying ? " · drying, " + u.dry_min_left + " min left" : ""}`).join("   ");
+    const trays = a.trays || [];
+    $("#cSlots").innerHTML = trays.length ? trays.map(t => `<button class="slot${t.active ? " on" : ""}${selSlot === t.slot ? " sel" : ""}" data-slot="${t.slot}">
+        <span class="dot" style="background:${t.color || "transparent"}"></span><div style="font-weight:600;margin-top:6px">${t.empty ? "Empty" : esc(t.type)}</div>
+        <div class="fa sm">${t.unit}·${t.tray}${t.remain != null && t.remain >= 0 && !t.empty ? " · " + t.remain + "%" : ""}</div></button>`).join("")
+      : '<div class="mu sm">No AMS found.</div>';
+    $("#cSlots").querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { selSlot = +b.dataset.slot; slotActions(trays.find(t => t.slot === selSlot)); VIEWS.controls.update(status); });
+    const opt = p.options || {};
+    for (const k of ["startup_read", "tray_read", "remain_calc"]) { const c = $(`[data-amsopt=${k}]`); if (c && document.activeElement !== c) c.checked = !!opt["ams_" + k]; }
+    for (const k of ["auto_recovery", "auto_switch_filament"]) { const c = $(`[data-opt=${k}]`); if (c) c.checked = !!opt[k]; }
+    $("#cMoveLock").textContent = p.busy ? "Moving is locked while a print is running or paused." : "";
+    document.querySelectorAll("[data-jog],#cMotors,[data-ex]").forEach(b => b.disabled = !!p.busy);
+    $("#cCal").disabled = !!p.busy;
+    const hms = p.hms || [];
+    $("#cInfo").innerHTML = `Stage: ${esc(p.stage || "-")}<br>Speed: ${esc(p.speed_name || "-")}${p.speed_pct ? " (" + p.speed_pct + "%)" : ""}<br>
+      Wi-Fi: ${esc(p.wifi || "-")} · Nozzle: ${esc(p.nozzle_diameter || "-")} mm · SD card: ${esc(opt.sdcard || "-")}
+      ${hms.length ? "<br><span style='color:var(--bad)'>Printer alerts:</span> " + hms.map(h => { const c = h.replace("HMS_", ""); const seg = c.length === 17 ? c.slice(0, 4) + "_" + c.slice(4, 8) + "_" + c.slice(9, 13) + "_" + c.slice(13) : c;
+        return `<a href="https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/${seg}" target="_blank" rel="noopener noreferrer">${esc(h)}</a>`; }).join(", ") : ""}`;
+  }
+};
+function slotActions(t) {
+  const el = $("#cSlotAct");
+  if (!t) { el.classList.add("hide"); return; }
+  el.classList.remove("hide");
+  el.innerHTML = `<span class="mu sm grow">AMS ${t.unit} · slot ${t.tray}${t.empty ? "" : " · " + esc(t.type)}</span>
+    <button class="btn sm pri" id="sLoad">Load</button><button class="btn sm" id="sEdit">Set filament</button><button class="btn sm" id="sPa">K${t.k != null && t.k >= 0 ? " " + t.k.toFixed(3) : ""}</button><button class="btn sm" id="sRfid">Re-read RFID</button>`;
+  $("#sLoad").onclick = () => confirmBox("Load this slot?", `AMS ${t.unit} · slot ${t.tray}`, "Load", () => cmd("ams_load", {tray: t.slot}, "Loading..."));
+  $("#sRfid").onclick = () => cmd("ams_rfid", {slot: t.slot}, "Reading RFID...");
+  $("#sEdit").onclick = () => editSlot(t);
+  $("#sPa").onclick = () => paDialog(t);
+}
+
+// Pressure advance: type a K you already know, it's saved on the printer and assigned to the slot.
+async function paDialog(t) {
+  const d = $("#dlg"), where = t.slot === 254 ? "external spool" : `AMS ${t.unit} · slot ${t.tray}`;
+  const cur = t.k != null && t.k >= 0 ? t.k.toFixed(3) : "";
+  $("#dlgBody").innerHTML = `<div style="font-size:18px;font-weight:650;margin-bottom:6px">Pressure advance · ${esc(where)}</div>
+    <div class="mu sm" style="margin-bottom:12px">${esc(t.type || "No material set")} · current K ${cur || "not reported"}</div>
+    <div class="row" style="margin-bottom:8px"><input type="number" id="pK" step="0.001" min="0" max="2" placeholder="K, e.g. 0.032" value="${cur}" style="width:130px">
+      <input type="text" id="pN" maxlength="40" placeholder="Name (optional)" class="grow"></div>
+    <div class="row" style="justify-content:flex-end;margin-bottom:14px"><button class="btn sm" id="pNo">Close</button><button class="btn sm pri" id="pOk">Save K</button></div>
+    <div class="h">Saved on the printer</div><div class="list" id="pList"><div class="mu sm">Loading...</div></div>`;
+  $("#pNo").onclick = () => d.close();
+  const send = async (body, msg) => { try { await api("/api/pa", body); toast(msg); d.close(); } catch (e) { toast(e.message); } };
+  $("#pOk").onclick = () => {
+    const k = parseFloat($("#pK").value);
+    if (!(k >= 0 && k <= 2)) return toast("Type a K value (usually 0.01–0.1)");
+    send({action: "set", slot: t.slot, k, name: $("#pN").value.trim()}, "K " + k.toFixed(3) + " saved to this slot");
+  };
+  d.showModal();
+  try {
+    const r = await api("/api/pa");
+    if (!r.table) { $("#pList").innerHTML = '<div class="mu sm">Your firmware keeps K on each slot (no saved list). Saving writes it straight to this slot.</div>'; return; }
+    const rows = (r.entries || []).filter(e => !t.idx || e.filament_id === t.idx);
+    $("#pList").innerHTML = rows.length ? rows.map(e => `<div><div class="grow"><div style="font-weight:600${e.cali_idx === t.cali_idx ? ";color:var(--ac)" : ""}">${esc(e.name)}</div>
+        <div class="fa sm">K ${e.k.toFixed(3)}${e.cali_idx === t.cali_idx ? " · in use" : ""}</div></div>
+        <button class="btn sm" data-puse="${e.cali_idx}" data-pf="${esc(e.filament_id)}">Use</button><button class="btn sm bad" data-pdel="${e.cali_idx}" data-pf="${esc(e.filament_id)}">✕</button></div>`).join("")
+      : '<div class="mu sm">None saved for this material yet.</div>';
+    $("#pList").querySelectorAll("[data-puse]").forEach(b => b.onclick = () => send({action: "select", slot: t.slot, cali_idx: +b.dataset.puse, filament_id: b.dataset.pf}, "Slot updated"));
+    $("#pList").querySelectorAll("[data-pdel]").forEach(b => b.onclick = () => send({action: "delete", cali_idx: +b.dataset.pdel, filament_id: b.dataset.pf}, "Deleted"));
+  } catch (e) { $("#pList").innerHTML = `<div style="color:var(--bad)" class="sm">${esc(e.message)}</div>`; }
+}
+function editSlot(t) {
+  const d = $("#dlg"), cur = String(t.type || "").trim();
+  let sel = cur ? -1 : 0;
+  for (let i = FILAMENTS.length - 1; i >= 0; i--) if (FILAMENTS[i][2].toUpperCase() === cur.toUpperCase()) sel = i;
+  $("#dlgBody").innerHTML = `<div style="font-size:18px;font-weight:650;margin-bottom:14px">${t.slot === 254 ? "External spool" : `AMS ${t.unit} · slot ${t.tray}`}</div>
+    <input type="text" id="eQ" placeholder="Search materials, e.g. CF, silk, nylon" style="width:100%;margin-bottom:8px">
+    <select id="eT" style="width:100%;margin-bottom:8px"></select>
+    <input type="text" id="eX" maxlength="16" placeholder="Type name, e.g. PLA-LED" style="width:100%;margin-bottom:8px" class="hide">
+    <div class="mu sm" id="eInfo" style="margin-bottom:12px"></div>
+    <div class="row" style="margin-bottom:10px"><span style="width:90px">Color</span><input type="color" id="eC" value="${t.color || "#ffffff"}" style="width:60px;height:40px;border:0;background:none"></div>
+    <div class="row" style="margin-bottom:16px"><span style="width:90px">Nozzle °C</span><input type="number" id="eMin" style="width:80px" min="150" max="300"> – <input type="number" id="eMax" style="width:80px" min="150" max="300"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn sm" id="eNo">Cancel</button><button class="btn sm pri" id="eOk">Save</button></div>`;
+  const fill = () => {
+    const q = $("#eQ").value.trim().toLowerCase();
+    let html = "", fam = null;
+    FILAMENTS.forEach((r, i) => {
+      if (q && !(r[0] + " " + r[1] + " " + r[2]).toLowerCase().includes(q)) return;
+      if (r[0] !== fam) { if (fam !== null) html += "</optgroup>"; fam = r[0]; html += `<optgroup label="${esc(fam)}">`; }
+      html += `<option value="${i}"${i === sel ? " selected" : ""}>${esc(r[1])}</option>`;
+    });
+    if (fam !== null) html += "</optgroup>";
+    html += `<optgroup label="Anything else"><option value="-1"${sel < 0 ? " selected" : ""}>Other (type your own)</option></optgroup>`;
+    $("#eT").innerHTML = html;
+  };
+  const show = setTemps => {
+    $("#eX").classList.toggle("hide", sel >= 0);
+    if (sel >= 0) {
+      const r = FILAMENTS[sel];
+      $("#eInfo").textContent = `Sent to the printer as ${r[2]} · suggested ${r[3]}–${r[4]}°C`;
+      if (setTemps) { $("#eMin").value = r[3]; $("#eMax").value = r[4]; }
+    } else $("#eInfo").textContent = "Any name up to 16 letters. Set the temperatures yourself (150–300°C).";
+  };
+  fill();
+  if (sel < 0) $("#eX").value = cur;
+  $("#eMin").value = sel >= 0 ? FILAMENTS[sel][3] : 200; $("#eMax").value = sel >= 0 ? FILAMENTS[sel][4] : 240;
+  show(false);
+  $("#eQ").oninput = () => { fill(); const v = +$("#eT").value; if (v !== sel) { sel = v; show(true); } };
+  $("#eT").onchange = () => { sel = +$("#eT").value; show(true); };
+  $("#eNo").onclick = () => d.close();
+  $("#eOk").onclick = () => {
+    let type, idx, name;
+    if (sel < 0) { type = $("#eX").value.trim().toUpperCase(); idx = ""; name = type; if (!type) return toast("Type a material name"); }
+    else { const r = FILAMENTS[sel]; type = r[2]; idx = r[5]; name = r[1]; }
+    const mn = +$("#eMin").value, mx = +$("#eMax").value;
+    if (!(mn >= 150 && mx <= 300 && mn <= mx)) return toast("Temperatures must be 150–300°C, min below max");
+    d.close();
+    cmd("ams_setting", {slot: t.slot, type, idx, color: $("#eC").value, min: mn, max: mx}, "Slot set to " + name);
+  };
+  d.showModal();
+}
+
+// ---------- AMS (all units, drying, humidity, every slot)
+VIEWS.ams = {
+  build(el) {
+    this.sig = "";
+    el.innerHTML = `<div id="amsUnits"><div class="card mu">Loading...</div></div>
+      <div class="card ro-hide"><div class="h">Actions</div>
+        <div class="row w"><button class="btn sm" id="aUnload">Unload</button><button class="btn sm" id="aExt">Load external spool</button><button class="btn sm" id="aRetry">Retry after AMS error</button></div>
+        <div class="mu sm" style="margin-top:12px">Drying can only be started from the printer's screen (the P1 series doesn't accept drying commands over the network). Its temperature, humidity and time left show up here while it runs.</div></div>`;
+    $("#aUnload").onclick = () => confirmBox("Unload filament?", "The printer will cut and pull back the current filament.", "Unload", () => cmd("ams_unload", null, "Unloading..."));
+    $("#aExt").onclick = () => cmd("ams_load", {tray: 254}, "Loading external spool...");
+    $("#aRetry").onclick = () => cmd("ams_resume", null, "Retrying AMS...");
+  },
+  update(s) {
+    const a = s.printer.ams || {}, units = a.units || [], trays = a.trays || [], ext = a.external;
+    const sig = JSON.stringify([units, trays, ext]);
+    if (sig === this.sig) return;
+    this.sig = sig;
+    const hum = u => u.humidity_pct != null ? u.humidity_pct + "%" : u.humidity_level != null ? u.humidity_level + " / 5" : "--";
+    const humNote = u => u.humidity_pct != null ? (u.humidity_pct > 40 ? "Damp" : u.humidity_pct > 25 ? "OK" : "Dry") : u.humidity_level != null ? (u.humidity_level <= 2 ? "Damp" : u.humidity_level <= 3 ? "OK" : "Dry") : "";
+    const slotRow = t => `<div><span class="dot" style="background:${t.color || "transparent"};width:28px;height:28px"></span>
+      <div class="grow"><div style="font-weight:600">${t.empty ? "Empty" : esc(t.type)}${t.name ? ` <span class="mu sm">${esc(t.name)}</span>` : ""}${t.active ? ' <span class="chip" style="color:var(--ac)">in use</span>' : ""}</div>
+        <div class="fa sm">Slot ${t.tray}${t.color && !t.empty ? " · " + esc(t.color.toUpperCase()) : ""}${t.remain != null && t.remain >= 0 && !t.empty ? " · " + t.remain + "% left" : ""}${t.k != null && t.k >= 0 && !t.empty ? " · K " + t.k.toFixed(3) : ""}</div>
+        ${t.remain != null && t.remain >= 0 && !t.empty ? `<div class="bar" style="height:5px;margin-top:6px;max-width:220px"><i style="width:${t.remain}%;background:${t.remain < 15 ? "var(--bad)" : "var(--ac)"}"></i></div>` : ""}</div>
+      <button class="btn sm" data-aload="${t.slot}" ${t.empty || t.active ? "disabled" : ""}>Load</button><button class="btn sm" data-aedit="${t.slot}">Set</button><button class="btn sm" data-apa="${t.slot}" title="Pressure advance">K</button><button class="btn sm" data-arfid="${t.slot}" title="Re-read RFID">RFID</button></div>`;
+    let html = units.map(u => `<div class="card">
+        <div class="row"><div style="font-weight:650;font-size:17px" class="grow">AMS ${u.unit}</div>
+          <span class="chip" style="color:${u.drying ? "var(--ac)" : "var(--mu)"}">${u.drying ? "Drying" : "Not drying"}</span></div>
+        <div class="stats">
+          <div class="stat"><span class="mu sm">Temperature</span><b class="num">${u.temp != null ? Math.round(u.temp) + "°C" : "--"}</b></div>
+          <div class="stat"><span class="mu sm">Humidity</span><b class="num">${hum(u)}</b><span class="fa sm">${humNote(u)}</span></div>
+          <div class="stat"><span class="mu sm">Drying left</span><b class="num">${u.drying ? mins(u.dry_min_left) : "--"}</b></div></div>
+        <div class="list" style="margin-top:12px">${trays.filter(t => t.unit === u.unit).map(slotRow).join("") || '<div class="mu">No slots reported.</div>'}</div></div>`).join("");
+    if (!units.length) html = '<div class="card mu">No AMS found.</div>';
+    html += `<div class="card"><div class="h">External spool</div><div class="list">${ext ? `<div><span class="dot" style="background:${ext.color || "transparent"};width:28px;height:28px"></span>
+      <div class="grow"><div style="font-weight:600">${ext.type ? esc(ext.type) : "Not set"}${ext.active ? ' <span class="chip" style="color:var(--ac)">in use</span>' : ""}</div></div>
+      <button class="btn sm" data-aedit="254">Set</button><button class="btn sm" data-apa="254">K</button></div>` : '<div class="mu">Not reported.</div>'}</div></div>`;
+    $("#amsUnits").innerHTML = html;
+    const find = slot => slot === 254 ? Object.assign({slot: 254, unit: "ext", tray: "spool", empty: !(ext && ext.type)}, ext || {}) : trays.find(t => t.slot === slot);
+    $("#amsUnits").querySelectorAll("[data-aload]").forEach(b => b.onclick = () => { const t = find(+b.dataset.aload); confirmBox("Load this slot?", `AMS ${t.unit} · slot ${t.tray} · ${t.type}`, "Load", () => cmd("ams_load", {tray: t.slot}, "Loading...")); });
+    $("#amsUnits").querySelectorAll("[data-arfid]").forEach(b => b.onclick = () => cmd("ams_rfid", {slot: +b.dataset.arfid}, "Reading RFID..."));
+    $("#amsUnits").querySelectorAll("[data-aedit]").forEach(b => b.onclick = () => { editSlot(find(+b.dataset.aedit)); });
+    $("#amsUnits").querySelectorAll("[data-apa]").forEach(b => b.onclick = () => { paDialog(find(+b.dataset.apa)); });
+  }
+};
+
+// ---------- Print from SD
+VIEWS.print = {
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pRef">Refresh</button></div>
+      <div class="list" id="pList" style="margin-top:10px"><div class="mu">Loading...</div></div></div><div id="pDetail"></div>`;
+    $("#pRef").onclick = () => this.load(true);
+    this.load(false);
+  },
+  async load(refresh) {
+    $("#pList").innerHTML = '<div class="mu">Loading...</div>';
+    try {
+      const j = await api("/api/files" + (refresh ? "?refresh=1" : ""));
+      const files = Array.isArray(j) ? j : j.list || [];
+      $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><div class="grow"><div style="font-weight:600">${esc(f.title)}</div>
+        <div class="fa sm">${esc(f.date || "")} · ${(f.size / 1e6).toFixed(1)} MB</div></div><span class="fa">›</span></div>`).join("") : '<div class="mu">No sliced files found. Send one from Bambu Studio or OrcaSlicer.</div>';
+      $("#pList").querySelectorAll("[data-i]").forEach(r => r.onclick = () => this.open(files[+r.dataset.i]));
+    } catch (e) { $("#pList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  },
+  async open(f) {
+    const box = $("#pDetail");
+    box.innerHTML = `<div class="card"><div class="mu">Reading ${esc(f.title)}...</div></div>`;
+    box.scrollIntoView({behavior: "smooth"});
+    try {
+      const j = await api("/api/files/info?path=" + encodeURIComponent(f.path));
+      const plates = (j.plates || []).filter(p => p.sliced);
+      if (!plates.length) { box.innerHTML = '<div class="card mu">This file has no sliced plate.</div>'; return; }
+      let plate = plates[0];
+      const draw = () => {
+        const trays = (status && status.printer.ams && status.printer.ams.trays) || [];
+        const ext = status && status.printer.ams && status.printer.ams.external;
+        const fil = plate.filaments.length ? plate.filaments : [{id: 1, type: "", color: ""}];
+        const best = fl => {
+          let bestSlot = null, bestD = 1e9;
+          for (const t of trays) { if (t.empty || (fl.type && t.type.toUpperCase() !== fl.type.toUpperCase())) continue; const d = colorDist(fl.color, t.color); if (d < bestD) { bestD = d; bestSlot = t.slot; } }
+          if (bestSlot == null) { const any = trays.find(t => !t.empty); bestSlot = any ? any.slot : 254; }
+          return bestSlot;
+        };
+        const opts = trays.map(t => `<option value="${t.slot}">AMS ${t.unit}·${t.tray}  ${esc(t.empty ? "empty" : t.type)}</option>`).join("") + `<option value="254">External spool${ext && ext.type ? " " + esc(ext.type) : ""}</option>`;
+        box.innerHTML = `<div class="card"><div class="row" style="align-items:flex-start;gap:14px">
+            <img src="${BASE}/api/files/plate.png?path=${encodeURIComponent(f.path)}&plate=${plate.index}" style="width:120px;height:120px;border-radius:14px;background:var(--s2);object-fit:contain">
+            <div class="grow"><div style="font-weight:650;font-size:17px">${esc(f.title)}</div>
+            <div class="mu sm">${mins(plate.seconds / 60)}${plate.weight_g ? " · " + Math.round(plate.weight_g) + " g" : ""}</div>
+            ${plates.length > 1 ? `<div class="seg" id="pPl" style="margin-top:10px">${plates.map(p => `<button data-v="${p.index}">Plate ${p.index}</button>`).join("")}</div>` : ""}</div></div>
+          <div class="div"></div><div class="h">Filaments</div>
+          ${fil.map((fl, i) => `<div class="row" style="margin-bottom:8px"><span class="dot" style="background:${esc(fl.color) || "transparent"}"></span><span style="width:110px">${esc(fl.type || "Filament " + fl.id)}${fl.used_g ? " · " + Math.round(fl.used_g) + " g" : ""}</span>
+            <select class="grow" data-fid="${fl.id}">${opts}</select></div>`).join("")}
+          <div class="div"></div>
+          <label class="ck"><input type="checkbox" id="oLvl" checked>Bed leveling</label>
+          <label class="ck"><input type="checkbox" id="oVib" checked>Vibration calibration</label><label class="ck"><input type="checkbox" id="oTl">Timelapse</label>
+          <button class="btn pri" id="pStart" style="width:100%;margin-top:12px">Start print</button></div>`;
+        if (plates.length > 1) { paintSeg("#pPl", plate.index); box.querySelectorAll("#pPl button").forEach(b => b.onclick = () => { plate = plates.find(p => p.index === +b.dataset.v); draw(); }); }
+        fil.forEach(fl => { box.querySelector(`[data-fid="${fl.id}"]`).value = best(fl); });
+        $("#pStart").disabled = !status || status.printer.busy;
+        $("#pStart").onclick = () => {
+          const map = fil.map(fl => [fl.id, +box.querySelector(`[data-fid="${fl.id}"]`).value]);
+          const useExt = map.some(m => m[1] === 254);
+          const arr = new Array(Math.max(1, ...map.map(m => m[0]))).fill(-1);
+          map.forEach(([id, slot]) => arr[id - 1] = slot);
+          const body = {path: f.path, plate: plate.index, use_ams: !useExt, ams_mapping: useExt ? [] : arr, timelapse: $("#oTl").checked,
+            bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked};
+          confirmBox("Start this print?", f.title + " · plate " + plate.index + (useExt ? "\nFrom the external spool." : ""), "Start", async () => {
+            try { await api("/api/print", body); toast("Print started"); tab = "watch"; renderTabs(); } catch (e) { toast(e.message); }
+          });
+        };
+      };
+      draw();
+    } catch (e) { box.innerHTML = `<div class="card" style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
+function colorDist(a, b) {
+  const h = c => { c = (c || "").replace("#", ""); return c.length >= 6 ? [0, 2, 4].map(i => parseInt(c.substr(i, 2), 16)) : null; };
+  const x = h(a), y = h(b); if (!x || !y) return 500;
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+}
+
+// ---------- Current job / skip objects
+VIEWS.job = {
+  build(el) { el.innerHTML = '<div class="card" id="jBox"><div class="mu">Loading...</div></div>'; this.load(); },
+  async load() {
+    const box = $("#jBox");
+    try {
+      const j = await api("/api/job");
+      if (!j.found) { box.innerHTML = '<div class="mu">No current job found on the SD card.</div>'; return; }
+      box.innerHTML = `<img src="${BASE}/api/job/plate.png?t=${Date.now()}" style="width:100%;max-height:320px;object-fit:contain;background:var(--s2);border-radius:14px">
+        <div class="row" style="margin:14px 0 4px"><div class="h grow" style="margin:0">Objects</div><span class="mu sm">Plate ${j.plate}</span></div>
+        <div class="list">${j.objects.map(o => `<label class="ck"><input type="checkbox" value="${o.id}" ${o.skipped ? "disabled" : ""}><span class="grow" style="${o.skipped ? "text-decoration:line-through;color:var(--fa)" : ""}">${esc(o.name)}</span>${o.skipped ? '<span class="fa sm">skipped</span>' : ""}</label>`).join("")}</div>
+        <button class="btn bad" id="jSkip" style="width:100%;margin-top:12px">Skip selected objects</button>`;
+      $("#jSkip").onclick = () => {
+        const ids = [...box.querySelectorAll("input:checked")].map(i => +i.value);
+        if (!ids.length) return toast("Tick the objects to skip");
+        confirmBox("Skip " + ids.length + " object" + (ids.length > 1 ? "s" : "") + "?", "The printer stops printing them for the rest of this job. This can't be undone.", "Skip", async () => {
+          try { await api("/api/cmd", {action: "skip", objects: ids}); toast("Skipping..."); setTimeout(() => this.load(), 3000); } catch (e) { toast(e.message); }
+        }, true);
+      };
+    } catch (e) { box.innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
+
+// ---------- Timelapses
+VIEWS.timelapses = {
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Timelapses</div><button class="btn sm" id="tRef">Refresh</button></div>
+      <div class="list" id="tList" style="margin-top:10px"><div class="mu">Loading...</div></div></div>`;
+    $("#tRef").onclick = () => this.load(true);
+    this.load(false);
+  },
+  async load(refresh) {
+    try {
+      const j = await api("/api/timelapses" + (refresh ? "?refresh=1" : ""));
+      const v = Array.isArray(j) ? j : j.list || [];
+      $("#tList").innerHTML = v.length ? v.map(x => `<div>${x.thumb ? `<img class="thumb" loading="lazy" src="${BASE}/api/timelapses/thumb?path=${encodeURIComponent(x.thumb)}">` : '<div class="thumb"></div>'}
+        <div class="grow"><div style="font-weight:600;word-break:break-all">${esc(x.name)}</div><div class="fa sm">${esc(x.date || "")} · ${(x.size / 1e6).toFixed(1)} MB</div></div>
+        <a class="btn sm" href="${BASE}/api/timelapses/download?path=${encodeURIComponent(x.path)}" download>Download</a></div>`).join("") : '<div class="mu">No timelapses on the SD card.</div>';
+    } catch (e) { $("#tList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
+
+// ---------- Train
+let trFilter = "review";
+VIEWS.train = {
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Your detection model</div><span class="chip" id="trBadge"></span></div>
+      <div class="sm" id="trInfo" style="margin-top:10px;white-space:pre-line"></div>
+      <div class="row" style="margin-top:12px"><button class="btn sm pri" id="trNow">Train now</button><span class="mu sm" id="trState"></span></div>
+      <div class="row" style="margin-top:12px"><span class="grow">Let my model decide when to pause</span><label class="sw"><input type="checkbox" id="trUse"><span></span></label></div></div>
+      <div class="card"><div class="seg" id="trF"><button data-v="review">To review</button><button data-v="all">All</button><button data-v="failed">Failed</button><button data-v="good">Good</button></div>
+      <div class="list" id="trList" style="margin-top:10px"></div></div><div id="trRev"></div>`;
+    $("#trNow").onclick = async () => { try { await api("/api/train", {}); toast("Training..."); this.loadModel(); } catch (e) { toast(e.message); } };
+    $("#trUse").onchange = e => setting({use_custom: e.target.checked}, e.target.checked ? "Your model is on" : "Using Obico stock");
+    paintSeg("#trF", trFilter);
+    el.querySelectorAll("#trF button").forEach(b => b.onclick = () => { trFilter = b.dataset.v; paintSeg("#trF", trFilter); this.loadList(); });
+    this.loadModel(); this.loadList();
+  },
+  update(s) { if (s.settings && document.activeElement !== $("#trUse")) $("#trUse").checked = s.settings.use_custom !== false; },
+  async loadModel() {
+    try {
+      const s = await api("/api/train"), c = s.counts || {}, r = s.report;
+      const ok = s.trained && r && r.ok;
+      $("#trBadge").textContent = ok ? "TRAINED" : "NOT YET"; $("#trBadge").style.color = ok ? "var(--ok)" : "var(--mu)";
+      let txt = `Failed prints ${c.failed || 0}/${s.min_failed}   Good prints ${c.good || 0}/${s.min_good}` + (c.review ? `\n${c.review} to review` : "");
+      if (ok && r.cv) {
+        const f = x => x ? `caught ${x.caught ?? "?"}/${x.failed ?? "?"} failures, ${x.false_alarms ?? "?"} false alarms` : "-";
+        txt += `\n\nOn your own prints (cross-validated):\nYour model: ${f(r.cv)}\nObico stock: ${f(r.obico)}`;
+      }
+      $("#trInfo").textContent = txt;
+      $("#trState").textContent = s.running ? "Training..." : s.error ? "Error: " + s.error : r && r.trained_at ? "Last run " + new Date(r.trained_at * 1000).toLocaleString() : "";
+      $("#trNow").disabled = !!s.running;
+      if (s.running) setTimeout(() => tab === "train" && this.loadModel(), 2000);
+    } catch (e) { $("#trInfo").textContent = e.message; }
+  },
+  async loadList() {
+    try {
+      const j = await api("/api/prints"), all = (Array.isArray(j) ? j : j.list || []).sort((a, b) => b.started - a.started);
+      const keep = all.filter(m => trFilter === "all" || (trFilter === "review" ? (!m.label && m.status !== "recording") : m.label === trFilter));
+      $("#trList").innerHTML = keep.length ? keep.map(m => `<div style="cursor:pointer" data-id="${esc(m.id)}">
+        ${m.thumb != null ? `<img class="thumb" loading="lazy" src="${BASE}/api/prints/${encodeURIComponent(m.id)}/frame/${m.thumb}">` : '<div class="thumb"></div>'}
+        <div class="grow"><div style="font-weight:600">${esc(m.job)}</div><div class="fa sm">${new Date(m.started * 1000).toLocaleString()} · ${m.n} frames${m.end_state ? " · " + esc(m.end_state.toLowerCase()) : ""}${m.status === "recording" ? " · recording" : ""}</div></div>
+        <span class="chip" style="color:${m.label === "failed" ? "var(--bad)" : m.label === "good" ? "var(--ok)" : "var(--mu)"}">${m.label || (m.status === "recording" ? "recording" : "review")}</span></div>`).join("")
+        : `<div class="mu">${trFilter === "review" ? "Nothing to review. Failed, stopped or flagged prints show up here." : "None yet."}</div>`;
+      $("#trList").querySelectorAll("[data-id]").forEach(r => r.onclick = () => this.review(r.dataset.id));
+    } catch (e) { $("#trList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  },
+  async review(id) {
+    const box = $("#trRev");
+    box.innerHTML = '<div class="card mu">Loading...</div>';
+    box.scrollIntoView({behavior: "smooth"});
+    try {
+      const d = await api("/api/prints/" + encodeURIComponent(id)), m = d.meta, n = (d.ticks || []).length || m.n;
+      if (!n) { box.innerHTML = '<div class="card mu">This print has no frames.</div>'; return; }
+      let idx = m.fail_start != null ? m.fail_start : Math.floor(n / 2);
+      box.innerHTML = `<div class="card"><div style="font-weight:650;font-size:17px">${esc(m.job)}</div>
+        <div class="mu sm" style="margin-bottom:10px">${n} frames, one every 10 s. Drag to the first frame where it went wrong.</div>
+        <img id="rvImg" style="width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:14px">
+        <input type="range" id="rvR" min="0" max="${n - 1}" value="${idx}" style="margin-top:10px"><div class="mu sm num" id="rvT"></div>
+        <div class="row w" style="margin-top:12px"><button class="btn bad" id="rvFail">Failure started here</button><button class="btn go" id="rvGood">Whole print was fine</button>
+        <button class="btn sm" id="rvIgn">Ignore</button><button class="btn sm" id="rvDel" style="margin-left:auto">Delete</button></div></div>`;
+      const show = () => { idx = +$("#rvR").value; $("#rvImg").src = `${BASE}/api/prints/${encodeURIComponent(id)}/frame/${idx}`; const t = idx * 10; $("#rvT").textContent = `Frame ${idx + 1}/${n} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")} into the print`; };
+      $("#rvR").oninput = show; show();
+      const label = async (lab, extra) => { try { await api(`/api/prints/${encodeURIComponent(id)}/label`, Object.assign({label: lab}, extra || {})); toast("Saved. Retraining in about 20 s."); box.innerHTML = ""; this.loadList(); this.loadModel(); } catch (e) { toast(e.message); } };
+      $("#rvFail").onclick = () => label("failed", {fail_start: idx});
+      $("#rvGood").onclick = () => label("good");
+      $("#rvIgn").onclick = () => label("ignore");
+      $("#rvDel").onclick = () => confirmBox("Delete this recording?", "Its frames and features are removed from training.", "Delete", async () => {
+        try { await api(`/api/prints/${encodeURIComponent(id)}/delete`, {}); box.innerHTML = ""; this.loadList(); this.loadModel(); } catch (e) { toast(e.message); }
+      }, true);
+    } catch (e) { box.innerHTML = `<div class="card" style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
+
+// ---------- Command center (master code only)
+VIEWS.admin = {
+  build(el) {
+    el.innerHTML = `
+    <div class="card"><div class="row"><div class="grow"><div style="font-weight:650;font-size:17px">Freeze everyone</div>
+        <div class="mu sm" id="aFrzTxt">People on the general code can only watch the camera. You keep full control.</div></div>
+        <label class="sw"><input type="checkbox" id="aFrz"><span></span></label></div></div>
+    <div class="card"><div class="row"><div class="h grow" style="margin:0">Y-axis exercise</div><span class="chip" id="exChip">-</span></div>
+      <div class="mu sm" style="margin:8px 0 10px" id="exTxt">Homes, lifts the nozzle 20 mm, then moves the toolhead back and forth on Y only. Stops by itself, or if a print starts.</div>
+      <div class="row w" id="exSet"><span class="sm">Hours</span><input type="number" id="exH" value="24" min="0.05" max="48" step="0.5" style="width:80px">
+        <span class="sm">Speed mm/s</span><input type="number" id="exS" value="100" min="20" max="500" step="10" style="width:80px"></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm pri" id="exGo">Start</button><button class="btn sm bad" id="exStop">Stop</button></div></div>
+    <div class="card"><div class="h">General access code</div>
+      <div class="mu sm" style="margin-bottom:10px">Changing it logs out everyone on the old code.</div>
+      <div class="row"><input type="text" id="aCode" class="grow" maxlength="32" autocomplete="off" placeholder="New code" inputmode="numeric">
+        <button class="btn sm pri" id="aCodeGo">Change</button></div></div>
+    <div class="card"><div class="row"><div class="h grow" style="margin:0">Logged in now</div><button class="btn sm" id="aRef">Refresh</button></div>
+      <div class="list" id="aList" style="margin-top:10px"><div class="mu">Loading...</div></div></div>
+    <div class="card"><div class="row"><div class="h grow" style="margin:0">Everyone who opened the link</div><span class="chip" id="aVCount"></span></div>
+      <svg id="aMap" viewBox="0 0 720 360" style="width:100%;height:auto;margin-top:10px;background:var(--s2,#1d1d22);border-radius:12px;display:block"><path fill="var(--mu,#777)" fill-opacity=".35" d="M241 340L240 341L240 342L235 342L231 342L229 341L227 341L232 341L236 341L238 340L239 339L241 340ZM42 339L38 339L35 339L34 338L33 337L34 336L38 337L40 337L41 338L42 339ZM270 336L272 337L273 338L273 339L273 340L270 341L267 341L263 342L259 342L254 342L252 341L252 340L256 340L258 339L259 338L260 338L261 337L263 336L264 336L267 336L270 336ZM118 327L120 327L123 327L121 328L120 328L117 328L115 327L118 327ZM109 327L112 328L111 328L108 327L105 327L107 326L109 327ZM162 324L164 324L166 324L168 325L166 325L164 325L161 325L158 325L156 325L155 324L157 323L159 324L162 324ZM223 322L223 323L223 324L222 324L220 325L218 325L215 325L216 324L214 324L212 325L210 324L210 323L212 323L214 322L216 322L216 321L217 321L217 319L218 318L219 318L221 319L222 320L223 321L223 322ZM0 349L0 349L2 348L5 349L6 349L7 348L8 348L11 349L14 348L20 348L22 348L23 348L26 349L32 350L36 350L44 351L50 350L58 351L63 351L68 351L74 350L74 349L66 349L60 349L58 348L53 347L53 346L54 346L55 345L54 344L51 344L49 343L46 342L51 342L56 342L59 343L62 342L66 341L67 341L66 340L64 339L61 339L57 339L53 338L49 338L48 337L45 337L44 336L43 334L44 334L46 335L49 334L53 334L54 335L57 335L60 334L63 334L65 333L68 333L68 332L67 331L68 331L70 330L71 331L74 331L77 330L80 330L82 330L85 329L87 329L90 329L91 329L93 329L95 329L98 329L101 329L104 329L106 329L109 329L112 329L115 329L118 329L121 329L123 328L125 328L128 328L130 328L132 327L133 328L134 329L135 329L137 329L140 330L143 330L145 330L148 330L150 330L153 330L156 330L159 331L160 330L158 329L157 328L155 328L154 327L153 327L153 325L154 326L157 326L159 326L162 326L164 326L165 327L167 327L170 327L173 327L175 326L177 327L180 327L182 325L183 326L185 326L188 326L190 327L192 327L195 327L197 328L199 327L199 326L201 327L204 327L206 327L208 328L210 328L212 327L214 327L217 327L220 326L222 326L224 326L225 325L226 324L225 323L225 322L224 322L224 321L223 320L223 319L224 318L225 317L225 316L225 315L225 314L227 313L228 312L229 312L231 311L232 310L233 310L234 309L236 309L237 309L239 308L240 308L242 307L243 307L244 307L246 307L245 308L243 308L242 309L240 308L239 309L237 309L236 310L235 310L235 311L235 312L236 312L234 313L233 313L231 314L230 314L229 315L229 316L229 317L230 317L232 318L234 318L234 319L235 320L235 321L236 321L237 322L237 324L238 325L238 326L239 326L238 327L237 328L236 329L233 329L233 330L231 331L228 331L226 332L223 332L220 332L219 333L216 333L212 333L209 333L206 333L206 334L209 335L211 335L213 336L210 336L207 336L204 337L204 338L206 339L207 340L209 341L214 341L217 341L220 342L224 343L229 343L233 343L237 344L241 345L243 346L244 346L246 346L249 345L253 345L257 344L260 343L265 343L270 344L274 344L276 343L278 343L284 343L287 342L291 342L295 342L300 341L303 341L301 340L301 339L297 339L293 339L289 339L288 338L288 337L289 336L292 336L296 335L298 335L300 334L302 333L305 333L308 333L309 333L312 332L315 332L318 332L320 331L322 331L325 330L327 330L329 329L329 328L327 328L328 327L329 326L331 326L333 325L335 325L337 324L338 323L339 323L342 323L343 323L345 323L346 322L348 322L349 323L351 323L354 323L356 322L359 322L360 323L362 323L364 322L366 322L368 322L370 321L373 321L374 320L375 320L377 320L379 320L381 321L382 322L384 321L385 320L387 320L389 320L390 321L392 320L394 320L396 320L399 320L401 320L403 320L404 321L405 321L407 321L410 321L412 321L414 321L416 321L418 320L420 320L422 320L424 319L426 319L427 318L428 317L430 317L431 318L432 318L434 318L436 319L437 320L439 319L440 318L442 318L444 317L446 317L448 317L450 316L451 316L453 315L455 315L457 315L458 314L460 314L462 314L462 313L464 312L465 312L467 312L469 312L471 312L473 312L474 312L475 313L476 314L477 315L480 315L481 315L483 316L485 316L486 316L488 315L490 315L492 315L494 316L496 316L498 316L499 318L499 319L497 320L496 321L498 321L498 322L497 323L496 324L497 324L500 325L502 324L503 323L504 323L505 322L506 321L507 321L508 320L509 320L511 319L513 319L515 319L516 318L517 317L518 317L520 316L522 316L523 315L524 315L526 314L528 315L529 314L531 314L534 314L535 314L536 312L537 313L538 314L539 314L541 314L543 314L545 314L547 314L548 314L550 314L552 315L553 314L556 314L557 314L559 314L561 314L562 313L563 313L566 311L567 311L568 312L570 313L572 314L574 314L576 314L578 314L580 313L582 313L583 312L586 312L587 312L589 312L590 313L591 313L593 313L595 314L597 314L600 315L602 314L603 314L605 313L606 313L608 313L610 313L612 313L614 313L616 313L618 314L619 313L622 313L624 313L626 313L628 313L630 312L630 311L631 311L632 312L632 313L633 314L635 314L637 314L640 314L642 314L644 314L646 314L649 314L651 314L652 314L652 315L653 316L655 316L658 317L660 317L663 317L665 318L667 318L669 317L670 318L672 318L674 319L676 319L678 319L679 320L682 320L683 321L685 321L688 321L690 322L692 322L695 322L697 322L699 322L701 323L702 323L702 324L701 325L700 326L699 327L696 328L695 328L692 329L691 330L690 330L688 331L688 332L687 332L687 333L687 334L688 335L689 336L693 337L694 338L690 338L687 338L684 338L682 339L681 340L681 341L680 342L682 343L683 343L685 344L687 345L690 345L693 346L698 347L699 348L705 348L706 349L712 348L717 349ZM224 288L227 289L230 289L229 290L227 290L226 290L225 291L224 291L222 291L220 290L218 290L215 289L213 288L211 286L212 286L215 287L218 288L219 287L219 286L221 285L223 285L223 286L224 288ZM243 282L245 283L244 284L241 284L240 284L239 285L238 284L240 283L242 283L243 282ZM501 279L497 280L497 278L498 278L498 277L499 278L501 278L501 279ZM651 262L653 262L654 262L655 262L657 262L657 264L656 265L656 266L655 266L654 267L653 267L652 267L651 265L651 264L649 262L649 261L651 262ZM706 262L706 263L708 262L708 263L708 264L706 266L705 267L706 268L705 268L703 268L702 270L701 272L700 273L699 273L697 273L696 273L693 272L694 270L697 268L698 268L699 267L701 266L702 265L703 264L704 263L704 262L706 261L706 262ZM709 252L711 254L711 253L712 254L712 255L714 256L715 256L716 255L717 255L717 257L716 258L714 258L714 259L714 260L713 261L712 263L710 263L709 263L710 261L710 260L708 259L708 258L709 258L709 256L709 255L709 253L708 252L706 250L705 249L706 249L707 250L709 251L709 252ZM694 224L693 225L692 224L691 223L690 222L688 221L688 220L689 220L690 221L691 222L692 222L693 223L694 224ZM717 215L717 216L716 217L715 216L715 215L716 215L717 215ZM0 212L0 213L0 213M719 214L717 214L717 213L718 213L719 213M696 213L695 213L694 212L696 213ZM694 210L695 211L694 211L693 211L693 209L694 210ZM460 207L460 210L461 210L461 211L460 212L460 211L459 211L460 213L460 214L459 214L459 216L458 218L457 221L456 225L455 228L454 230L453 230L451 231L450 231L448 230L448 229L447 227L447 226L447 224L447 223L448 222L449 220L449 219L448 218L448 217L448 215L449 214L449 212L450 212L451 212L452 212L453 212L454 210L455 209L456 208L456 207L457 208L458 206L458 205L458 204L459 205L460 206L460 207ZM647 208L648 209L649 208L650 209L651 210L651 211L651 213L651 214L652 214L652 216L652 217L653 218L655 219L656 220L658 221L657 221L659 223L659 225L660 224L661 225L662 227L663 228L664 229L666 231L666 232L666 233L666 235L667 236L667 238L667 239L666 241L666 242L666 243L665 245L663 246L663 248L662 249L661 250L661 251L660 253L660 254L660 255L659 256L657 256L655 256L654 257L653 258L651 257L650 257L650 256L649 256L647 258L645 257L644 257L643 257L641 256L640 255L640 253L639 252L638 251L636 251L637 250L636 249L635 250L634 251L635 249L635 248L636 247L636 246L634 248L633 248L632 250L630 249L630 248L629 246L628 246L629 245L626 244L625 244L623 243L619 243L616 244L614 245L612 244L610 245L608 246L608 247L607 248L606 248L604 248L603 248L601 248L600 248L599 249L598 249L597 249L596 250L595 250L593 250L591 249L590 248L590 247L591 247L591 246L592 244L591 243L590 241L590 240L590 239L589 238L589 237L588 236L588 235L587 233L587 232L588 233L587 231L588 232L588 233L588 232L587 230L587 229L587 228L587 227L588 226L587 225L588 224L588 225L589 224L591 223L592 222L593 221L594 221L595 221L596 221L598 221L598 220L599 220L600 220L602 219L603 218L603 217L604 216L605 216L605 215L606 213L607 215L608 214L607 213L608 212L609 213L609 211L610 210L610 209L611 209L611 208L612 209L612 208L613 208L614 208L616 209L617 210L618 210L619 210L619 209L620 207L621 207L620 206L621 205L622 204L623 205L625 204L625 203L624 203L625 202L626 203L627 204L629 204L631 204L632 204L633 204L634 205L633 206L633 207L632 207L632 208L631 209L631 210L633 211L634 212L635 212L637 214L638 214L639 215L640 215L642 215L642 214L643 213L643 212L643 210L643 209L643 207L643 206L644 205L643 205L644 204L644 203L644 202L645 201L646 202L646 204L646 205L647 206L647 207L647 208ZM684 201L685 202L683 202L683 200L684 201ZM601 200L601 201L598 199L600 199L601 199L602 200L601 200ZM682 200L681 200L680 200L679 199L679 198L681 199L682 200ZM683 199L683 200L682 198L681 197L682 197L683 198L683 199ZM609 200L607 201L607 200L608 199L610 198L610 197L612 197L613 197L614 197L615 197L614 197L612 198L610 199L609 200ZM596 196L597 197L598 197L596 198L595 198L593 198L594 197L595 197L596 196ZM606 196L606 197L603 198L600 198L600 197L601 196L603 197L604 197L606 196ZM680 197L678 196L677 196L676 195L677 195L678 195L679 196L680 197ZM675 195L674 194L673 194L673 193L674 194L675 195ZM577 194L581 194L582 193L585 194L586 195L589 196L591 197L589 198L587 197L585 197L583 197L581 196L579 195L577 195L577 196L573 195L573 194L571 194L572 192L575 192L576 193L577 193L577 194ZM629 192L628 194L628 192L629 192L629 191L629 192ZM672 194L671 194L670 193L669 192L669 190L670 191L671 192L672 193L672 194ZM664 191L663 191L663 192L662 192L660 193L659 193L658 192L657 191L659 191L660 191L660 190L660 191L662 191L662 190L663 190L663 188L664 188L665 189L665 190L664 191ZM614 187L614 188L612 187L612 186L614 186L614 187ZM621 186L622 188L620 187L618 187L617 187L616 187L616 186L619 186L621 186ZM666 189L666 190L665 188L664 187L663 186L661 185L662 185L663 186L664 186L665 187L666 188L666 189ZM628 182L629 186L631 187L633 185L635 183L637 183L638 184L640 185L642 185L645 187L649 188L651 189L652 190L652 191L655 192L656 193L654 193L654 195L656 196L657 198L659 198L659 199L660 199L659 200L662 201L661 201L660 201L658 201L656 200L654 199L653 198L652 196L649 195L648 196L647 196L647 198L645 199L644 198L642 198L640 197L638 196L638 197L635 197L636 195L637 195L637 192L636 191L632 189L630 189L627 187L627 188L626 188L626 187L624 186L626 185L628 185L627 184L624 184L624 183L622 183L621 182L624 181L625 181L628 182ZM610 177L609 179L607 180L605 179L602 179L600 180L600 181L602 183L603 182L607 181L607 182L606 182L605 183L603 184L605 186L605 187L606 189L606 191L605 191L604 191L605 189L603 190L603 189L603 188L602 187L602 185L601 186L601 188L601 191L600 191L599 191L599 189L599 187L598 187L598 186L598 184L599 183L600 180L600 179L602 177L603 178L606 178L608 178L610 177ZM617 178L617 179L616 179L616 181L617 182L616 182L615 181L615 178L615 176L616 176L616 177L617 177L617 178ZM572 192L569 192L568 190L565 188L564 187L563 186L562 184L560 181L559 180L558 178L557 176L555 175L554 173L553 172L551 170L551 169L552 169L555 170L557 171L558 173L559 174L561 176L563 176L565 177L566 179L568 180L567 181L568 182L569 182L569 184L570 185L571 185L572 186L572 189L572 192ZM596 176L598 178L596 178L595 180L595 182L593 183L593 185L592 188L592 187L590 188L589 187L588 187L587 186L584 187L583 186L582 186L580 186L580 183L579 183L578 181L578 179L578 177L579 176L581 177L582 176L583 175L584 174L586 174L587 172L588 171L589 170L591 169L592 168L593 166L594 166L595 167L595 168L597 169L598 169L598 170L597 170L597 171L596 172L595 174L596 175L596 176ZM613 163L613 164L613 166L612 167L612 165L611 166L611 168L611 169L608 168L608 166L608 165L607 164L607 165L606 165L604 166L605 164L606 163L607 163L608 164L609 163L610 162L611 162L611 160L612 161L613 162L613 163ZM522 168L521 168L520 166L519 164L520 160L522 161L523 163L524 165L523 167L522 168ZM238 160L236 160L237 159L237 158L238 158L238 160ZM608 159L607 160L607 161L606 162L605 161L605 160L606 159L606 158L607 158L607 159L608 158L608 159ZM597 161L594 163L595 162L597 161L598 159L599 157L599 159L598 160L597 161ZM604 156L605 157L606 157L606 158L605 159L604 159L604 158L604 157L604 156ZM611 156L612 158L610 157L610 158L611 159L610 160L610 158L609 158L609 157L610 157L610 156L609 155L610 155L611 156ZM603 154L603 156L602 155L601 153L602 153L603 154ZM603 143L604 144L604 143L605 144L604 144L605 146L605 147L603 148L603 150L603 151L605 152L605 151L608 152L608 154L608 155L607 154L606 153L605 154L604 152L602 153L601 152L601 151L602 151L601 150L601 151L600 150L600 149L600 147L601 148L601 145L601 143L603 143ZM229 144L228 144L227 144L226 144L226 143L227 143L228 143L229 144ZM206 144L206 145L204 144L203 144L204 143L205 143L206 143L207 144L208 144L206 144ZM215 140L217 141L217 140L218 140L220 141L222 141L221 142L222 142L223 143L223 144L222 143L221 143L220 143L220 144L219 144L219 143L218 143L217 145L217 144L215 144L214 144L213 144L212 144L211 143L213 143L215 143L214 142L214 141L213 141L214 140L215 140ZM581 143L579 144L577 143L577 141L578 140L580 140L582 140L582 141L581 141L581 143ZM49 142L48 142L48 141L48 140L48 139L48 140L49 140L50 140L50 141L50 142L49 142ZM48 139L47 139L47 138L48 138L48 139ZM45 137L44 137L43 137L44 137L45 137ZM201 134L201 135L203 135L204 135L206 137L207 138L208 138L209 138L209 139L210 139L212 139L211 140L210 140L209 140L207 140L204 140L206 139L205 139L204 139L203 138L203 137L201 137L200 136L199 136L196 136L196 135L194 135L193 136L192 136L191 136L190 136L191 136L192 135L192 134L193 134L195 134L197 134L199 134L201 134ZM205 132L204 133L204 131L203 131L204 130L205 131L205 132ZM602 134L601 136L600 134L600 133L601 131L603 129L604 130L604 131L602 134ZM204 127L202 127L202 126L203 126L204 126L204 127ZM206 127L206 128L205 128L205 127L204 126L206 127ZM629 112L630 112L628 114L628 113L627 113L626 115L625 114L625 113L626 112L627 112L628 111L629 112ZM429 109L428 110L426 111L425 111L425 110L426 110L426 109L427 109L429 109ZM407 109L408 109L410 109L412 109L411 110L413 109L412 110L409 110L407 109ZM391 104L390 105L391 106L390 107L389 106L388 106L385 105L385 104L387 104L390 104L391 104ZM378 98L380 99L379 102L378 102L377 102L377 99L376 98L377 98L378 98ZM642 106L641 107L642 108L641 110L638 111L634 111L632 113L630 112L630 111L627 111L624 112L622 112L624 114L623 117L621 118L620 117L621 115L620 115L619 113L621 113L622 112L624 110L625 109L629 109L631 109L633 105L635 106L638 104L639 104L640 101L640 99L641 98L643 97L644 100L644 102L642 104L642 106ZM379 96L378 97L377 95L379 94L379 96ZM648 92L649 92L651 91L651 93L648 94L646 96L643 95L642 97L640 97L640 95L641 93L643 93L643 90L644 89L646 91L648 92ZM233 87L234 87L236 87L235 88L234 88L232 87L231 87L232 86L233 87ZM236 82L235 82L233 81L231 80L232 80L234 81L236 81L236 82ZM113 83L112 83L109 82L108 82L106 81L106 80L104 80L103 79L103 78L105 79L107 79L108 79L109 80L110 81L112 82L113 83ZM248 79L246 80L248 80L249 80L248 81L250 81L251 81L253 82L252 83L254 83L254 84L255 85L254 87L253 87L252 86L252 85L252 84L249 86L248 86L249 85L247 85L245 85L241 85L241 84L242 83L243 82L245 79L247 77L248 77L249 77L248 79ZM95 72L97 72L96 74L98 76L97 76L96 75L95 74L94 73L94 72L95 72ZM647 79L649 82L646 81L645 84L647 86L647 88L645 87L644 88L644 86L644 84L644 82L644 81L644 78L643 76L643 73L645 72L644 72L645 71L646 73L647 75L646 76L647 79ZM346 75L343 77L340 76L342 74L341 72L343 71L345 70L347 70L349 71L348 72L348 74L346 75ZM385 69L384 70L382 69L382 68L385 68L385 69ZM54 66L52 67L51 66L51 65L52 64L54 64L55 64L56 65L54 66ZM354 63L352 65L354 65L356 65L356 66L354 68L356 68L358 71L359 71L360 73L361 74L363 75L363 76L362 76L363 77L361 78L358 78L355 79L354 79L353 80L351 79L350 80L348 80L351 78L353 77L350 77L349 76L352 75L350 74L351 73L354 73L354 72L353 71L350 70L351 69L350 68L349 69L349 67L348 66L348 64L350 63L352 63L354 63ZM29 60L28 60L26 60L25 60L27 59L29 59L29 60ZM201 56L201 57L200 57L199 56L200 55L201 55L201 56ZM196 55L194 56L192 56L192 55L194 54L196 54L196 55ZM17 52L18 53L19 53L21 53L23 53L22 54L21 54L19 54L19 53L17 53L16 53L17 52ZM190 49L190 50L191 49L192 50L194 50L197 51L197 52L198 52L200 53L198 53L195 53L194 52L192 53L189 54L188 53L186 53L187 52L188 50L188 49L190 49ZM331 47L331 48L333 50L330 51L324 53L323 53L320 53L314 52L316 51L312 50L316 50L316 49L311 49L313 47L316 47L319 49L322 47L324 48L328 47L331 47ZM208 46L206 46L206 45L206 44L208 43L210 44L210 45L208 46ZM0 42L0 42L5 44L10 46L10 47L11 47L11 46L16 46L20 48L18 49L15 49L15 51L14 51L12 51L11 51L8 50L8 49L6 49L3 49L2 49L3 48L0 48L1 49L0 50M720 50L717 51L715 51L717 52L718 53L719 54L719 55L718 55L715 55L709 56L707 57L704 58L701 59L701 60L698 59L693 60L692 60L690 61L687 60L686 62L684 64L686 65L686 68L684 68L683 69L684 70L681 71L680 74L677 74L676 76L674 78L673 77L672 74L671 69L672 66L674 65L674 64L677 64L680 61L684 59L687 58L689 55L687 55L685 57L680 59L679 56L673 57L668 60L670 62L666 62L663 62L663 61L660 61L657 62L651 61L644 62L638 66L630 71L633 71L634 72L636 72L638 71L640 72L643 74L643 76L641 78L641 80L640 83L637 86L636 87L634 90L631 92L630 93L627 94L626 94L625 93L622 95L622 96L621 95L620 96L619 97L619 98L618 99L617 100L616 100L615 100L615 101L615 102L616 102L617 103L618 105L619 106L619 109L618 110L616 110L615 111L613 111L613 110L613 109L612 107L614 106L612 105L611 104L611 105L610 104L609 104L610 103L610 102L611 101L609 101L609 100L606 101L604 102L602 102L603 101L603 100L604 99L603 98L602 99L599 100L598 101L596 102L595 103L596 104L598 104L598 105L599 106L602 104L603 105L605 105L605 106L602 107L601 108L599 109L598 110L600 111L601 113L602 115L604 117L604 118L603 119L603 120L604 120L604 122L603 124L602 124L601 126L599 129L597 131L595 133L592 134L590 135L588 136L588 135L586 136L584 137L582 137L581 139L580 139L579 138L580 137L577 137L576 137L573 139L572 140L571 142L573 144L575 147L577 148L578 149L579 153L578 157L577 158L574 159L573 161L570 163L570 162L570 160L569 159L567 159L566 158L565 156L563 155L562 155L562 153L560 153L560 155L559 158L558 160L558 162L560 162L561 163L561 165L562 166L563 167L564 168L565 168L566 169L567 170L567 172L567 173L567 174L568 175L568 177L567 178L565 176L563 174L563 173L561 172L561 170L560 169L561 168L560 167L559 166L559 165L558 164L557 163L557 164L556 163L557 162L557 160L557 159L558 157L557 156L557 154L556 153L556 150L555 148L554 146L553 147L551 149L550 148L548 148L549 145L549 144L547 141L546 140L545 139L544 138L544 137L544 136L543 134L541 134L541 135L541 136L540 136L539 136L538 136L538 137L536 137L534 137L534 139L533 140L530 141L528 143L526 145L524 146L524 147L523 147L522 148L521 148L520 150L520 152L521 154L520 156L520 159L519 159L518 161L518 162L517 162L516 163L515 164L513 162L512 159L511 157L511 156L510 155L509 152L509 151L507 148L506 144L506 142L506 139L505 137L502 138L501 138L498 136L499 135L499 134L496 133L495 132L494 131L493 129L489 130L486 130L483 130L479 129L477 129L475 129L474 126L473 126L471 126L469 127L467 126L465 125L463 124L462 122L460 120L459 120L458 119L457 120L456 120L456 121L457 123L458 125L459 125L459 126L460 127L460 128L460 129L461 129L461 130L462 130L461 129L462 128L463 128L463 130L463 131L463 132L464 131L464 132L465 132L467 132L468 132L469 130L471 129L472 128L473 127L473 128L473 129L473 130L474 132L475 132L476 133L477 133L478 134L479 135L480 135L479 137L478 138L477 139L476 139L476 140L475 141L476 142L475 142L474 142L473 143L473 144L471 144L471 145L471 146L470 146L468 146L467 147L466 147L465 147L464 148L464 149L462 150L459 151L457 152L456 152L455 153L453 153L452 153L451 153L451 154L450 154L450 155L449 155L448 155L447 155L446 154L447 152L446 152L446 150L445 150L446 149L445 149L446 148L446 147L445 146L445 145L444 144L442 143L442 141L440 140L440 139L438 137L438 136L438 135L437 133L436 132L435 131L434 130L434 129L433 128L433 127L431 125L430 124L429 124L430 123L430 122L430 121L429 122L429 123L428 124L428 125L427 124L426 123L425 120L425 123L427 125L428 128L429 129L430 130L431 132L431 134L433 136L434 136L434 138L434 140L435 143L436 143L437 144L438 146L439 148L440 149L442 151L443 152L445 153L445 154L446 155L447 155L447 156L445 157L446 157L447 157L447 158L448 159L449 159L451 159L453 158L455 158L456 158L457 157L458 157L459 157L461 157L461 156L462 156L462 157L462 158L462 159L461 162L460 164L459 166L457 169L455 172L453 174L451 176L448 178L446 179L444 182L444 183L443 183L442 184L441 185L440 187L439 189L438 189L437 192L438 193L439 194L438 195L439 196L438 197L439 198L440 200L441 201L441 202L441 204L441 205L441 208L442 209L441 211L440 212L439 213L437 214L435 215L433 217L432 218L430 219L430 220L429 221L430 223L431 224L431 226L431 227L431 228L430 229L428 230L426 231L425 231L425 232L426 232L426 233L425 235L425 237L424 238L423 239L422 240L421 241L420 242L418 244L416 246L415 246L413 247L412 247L412 248L410 248L409 248L407 248L406 248L405 248L403 249L401 249L400 250L399 250L398 249L397 248L396 248L397 247L396 245L396 243L395 241L394 240L393 237L391 236L390 234L390 232L389 231L389 228L389 225L389 224L388 223L387 222L386 219L385 218L384 216L383 215L383 213L384 212L384 210L384 209L385 207L385 206L387 205L387 204L387 203L387 201L386 200L386 198L386 197L386 195L385 194L384 193L385 192L384 192L384 190L382 188L380 186L379 184L378 182L378 181L379 179L379 178L379 175L380 174L379 173L378 172L377 171L377 170L375 171L374 171L373 172L372 171L371 170L370 169L369 167L367 167L365 167L364 168L362 168L359 169L358 170L356 171L354 170L353 170L352 170L351 170L348 170L347 171L345 171L344 171L342 170L340 169L338 168L337 166L335 165L334 164L334 162L333 161L332 160L331 160L331 159L330 158L329 157L328 157L327 156L327 155L326 154L327 153L326 151L325 151L326 150L327 149L327 148L327 147L327 146L328 144L327 142L327 141L327 140L327 139L326 138L326 137L326 136L327 136L327 135L327 134L328 133L329 131L330 131L330 130L330 129L331 127L332 127L334 125L335 124L337 124L338 122L339 122L341 120L340 118L341 116L341 115L343 114L345 113L346 112L348 110L348 108L350 108L351 109L353 109L355 110L356 110L358 109L360 108L361 107L363 107L366 106L370 106L371 107L373 106L375 106L377 106L379 105L380 106L380 107L382 106L381 107L381 108L382 109L382 110L380 111L381 112L382 112L382 113L383 114L385 114L386 114L388 115L390 115L391 117L393 118L396 118L398 119L399 119L400 118L400 116L402 115L403 114L406 115L406 116L407 116L408 116L410 116L410 117L413 117L415 117L417 118L418 118L419 118L420 117L422 117L423 117L424 118L424 117L426 118L428 118L429 118L429 117L430 116L430 114L431 112L432 111L432 109L432 108L432 107L431 107L429 106L428 108L425 108L423 107L421 107L419 108L417 107L415 107L414 105L413 104L414 102L412 101L415 99L418 99L418 98L422 98L425 97L427 96L430 96L434 97L437 98L439 98L441 98L443 97L443 96L443 95L442 94L441 94L440 93L437 91L435 91L433 90L435 89L436 88L435 87L438 86L438 85L436 86L435 86L434 87L432 87L430 87L430 89L431 89L433 89L433 90L430 90L428 91L427 91L427 90L425 89L427 88L423 87L421 87L421 88L419 89L419 90L418 90L417 93L416 93L415 95L416 96L416 97L418 97L418 98L415 98L414 99L413 100L412 99L412 98L411 98L410 98L407 99L409 100L408 100L407 100L406 99L405 99L406 101L407 102L406 102L407 103L408 104L408 105L406 104L407 105L406 105L406 107L405 107L403 106L403 105L402 103L401 102L400 101L400 100L399 99L399 97L399 96L398 96L398 95L397 95L395 94L394 94L392 93L390 92L391 91L390 91L390 90L389 90L388 90L387 90L387 89L388 89L386 89L385 89L385 90L385 91L385 92L387 93L388 94L390 96L392 96L392 97L394 98L395 98L397 99L397 100L395 99L394 99L393 100L394 101L394 102L393 102L392 104L391 104L392 102L391 101L391 100L390 100L389 99L388 98L387 98L386 97L384 97L382 95L381 94L380 92L379 92L378 91L377 92L376 92L375 93L373 94L369 93L366 94L366 95L366 96L364 98L362 98L361 99L360 100L359 101L360 103L359 103L359 105L357 105L356 107L353 107L351 107L350 107L349 108L348 108L348 107L347 106L345 106L344 106L343 106L342 106L343 105L342 103L341 103L341 101L342 100L342 98L342 97L342 96L342 95L341 94L344 93L346 93L349 93L351 93L353 93L356 93L357 92L358 88L356 86L354 85L351 84L351 83L353 82L357 83L356 80L358 81L363 80L363 78L365 78L367 77L368 77L369 74L372 73L374 73L376 73L378 72L377 71L377 70L376 69L376 67L377 66L379 66L380 65L381 65L381 66L381 67L382 67L381 68L379 69L380 70L380 71L382 71L382 72L384 72L385 71L387 72L388 72L390 72L393 71L395 70L397 71L399 71L400 70L403 70L402 68L402 66L403 65L405 64L407 66L408 66L409 64L409 63L408 63L407 63L407 62L409 61L412 61L414 61L416 61L418 60L416 59L413 59L409 60L406 60L405 59L403 59L403 57L402 55L403 54L405 52L409 50L411 50L411 49L408 48L404 49L402 50L403 51L400 53L396 55L394 57L396 59L398 60L396 62L394 63L393 66L392 68L389 68L388 69L386 69L385 67L384 65L382 62L381 61L377 63L374 64L371 63L371 61L370 56L372 55L377 53L381 51L385 48L390 44L393 43L398 40L403 39L406 40L409 38L413 38L416 38L423 39L420 40L422 41L424 40L428 41L433 42L441 44L442 45L442 46L440 47L437 48L428 46L426 47L430 48L430 51L432 52L434 52L434 51L433 50L434 50L439 51L441 50L440 49L444 47L446 47L448 48L449 46L447 45L448 44L447 43L453 44L454 45L451 45L451 46L453 47L456 46L456 45L460 44L467 42L469 42L467 44L469 44L471 43L475 43L478 42L480 43L482 42L480 41L481 40L487 41L490 42L497 44L498 43L496 42L496 41L494 41L495 40L493 39L493 38L497 36L498 34L500 34L505 34L506 36L504 37L505 38L506 39L505 42L507 43L506 45L503 47L505 48L506 47L508 46L508 45L510 44L509 43L510 42L508 42L507 41L509 39L506 37L510 36L509 34L510 34L511 35L511 37L513 38L512 36L515 35L519 35L523 37L521 35L521 33L525 32L529 32L534 32L532 31L534 30L537 30L541 29L546 28L552 28L553 28L558 27L562 27L562 26L564 25L569 25L572 25L569 26L574 26L574 27L576 27L582 27L587 28L588 28L588 29L586 30L580 31L579 32L581 32L584 32L586 32L587 33L588 33L591 32L598 33L598 34L606 34L607 33L611 33L614 33L617 34L618 35L617 36L619 38L623 38L625 36L628 37L631 37L635 37L636 37L640 37L638 35L641 34L659 36L661 37L666 38L674 38L678 38L680 39L679 41L682 41L685 41L688 41L692 41L696 41L699 43L702 42L700 41L701 40L707 40L711 40L717 41M458 97L459 99L460 99L461 99L459 100L459 101L458 102L458 103L458 105L460 105L462 106L465 107L468 106L467 104L468 102L466 101L467 100L465 100L466 98L468 99L469 98L468 97L467 96L466 96L466 98L465 96L465 95L465 94L463 94L462 92L461 91L463 91L463 90L464 89L466 89L466 88L466 86L464 86L462 86L460 87L458 87L457 88L455 89L453 91L455 93L455 94L457 96L458 97ZM169 42L167 42L165 42L163 42L160 41L162 41L164 40L166 40L167 41L169 42ZM720 38L718 38L717 38M0 37L2 37L5 37L5 38L3 38L0 38L0 37ZM179 41L179 43L182 41L184 43L183 44L185 46L187 44L189 42L189 40L192 40L195 41L197 42L198 43L196 44L197 45L197 46L193 47L191 47L188 47L188 48L186 50L185 50L183 52L180 52L179 53L178 54L176 54L174 56L172 58L171 60L171 62L174 62L174 64L175 66L178 65L182 66L184 67L185 68L188 69L190 69L193 70L195 70L195 71L196 73L197 76L200 78L202 77L203 75L202 72L200 71L204 70L206 68L207 67L207 66L205 64L203 62L205 60L204 58L204 55L205 55L209 55L211 56L212 55L214 56L217 57L217 58L221 58L221 60L221 62L223 62L225 64L228 62L230 60L231 59L232 61L235 64L237 66L236 67L239 68L241 70L244 70L245 71L246 72L248 73L249 76L247 76L246 77L242 78L240 80L237 80L232 79L229 79L227 80L226 81L223 82L220 85L218 86L219 86L223 83L227 82L230 82L232 83L230 84L230 86L231 88L234 89L237 88L239 86L239 87L240 88L238 89L233 91L232 91L229 93L228 93L228 91L231 89L228 89L226 90L224 91L222 92L220 93L219 94L218 94L218 95L219 96L220 96L220 97L219 97L218 97L216 97L215 97L214 98L213 98L216 98L213 99L212 99L212 98L211 99L212 99L212 101L210 102L209 101L209 102L210 102L210 103L209 104L208 106L208 105L209 104L208 103L207 102L207 103L207 104L206 104L207 104L207 106L208 106L208 107L209 109L207 110L205 111L204 112L203 112L202 113L202 114L199 115L198 116L197 117L197 119L197 120L198 122L199 123L199 124L200 126L200 128L199 130L198 130L197 129L197 128L196 127L195 125L194 124L195 123L194 122L193 120L192 120L190 121L189 121L188 120L187 119L185 119L183 119L182 119L181 120L181 121L182 121L181 122L180 121L180 122L178 122L177 121L175 121L174 120L172 121L171 121L169 123L167 123L166 124L165 125L165 127L165 128L166 128L165 130L165 131L164 134L164 135L165 136L165 137L166 139L167 140L167 141L168 142L170 143L171 144L173 143L174 143L176 143L177 142L178 141L179 140L179 139L179 138L181 137L183 137L185 137L186 137L186 138L185 139L185 141L185 142L184 143L183 143L184 143L184 144L183 145L184 145L183 146L184 146L183 147L183 148L182 148L183 149L183 148L184 149L184 148L185 148L186 148L187 148L188 148L189 148L190 148L191 148L192 149L193 149L194 150L193 151L194 151L193 152L193 153L193 154L193 155L193 156L193 157L192 157L192 158L193 158L193 159L194 160L195 161L196 162L197 162L198 162L199 162L200 161L201 161L202 161L203 161L204 162L205 162L205 163L206 163L208 161L209 161L209 160L209 159L210 158L211 158L212 157L213 158L215 157L216 156L216 155L217 155L218 156L217 156L217 157L216 157L217 158L217 159L216 160L217 162L218 160L217 160L217 158L220 157L219 156L220 156L221 157L222 157L224 158L224 159L225 159L228 159L229 160L230 160L231 159L234 159L236 159L235 159L235 160L237 160L238 161L239 163L240 163L242 164L243 165L243 166L244 166L245 167L246 168L248 168L250 168L252 168L253 169L254 169L256 171L257 172L258 173L259 176L260 177L260 178L259 180L263 180L263 182L264 181L267 182L270 183L271 184L271 185L273 185L277 186L280 186L283 187L286 190L287 190L289 190L290 191L290 193L291 195L290 198L289 199L286 202L285 204L283 206L282 208L282 211L282 214L281 216L281 217L280 219L278 222L278 224L276 225L276 226L274 226L271 227L269 228L267 228L265 230L263 232L263 233L263 234L263 236L262 237L261 238L259 242L257 244L255 244L255 246L253 248L252 249L250 250L249 250L248 250L246 249L244 249L243 248L243 249L246 251L245 252L247 253L246 254L245 256L242 257L238 258L235 258L236 259L235 260L236 261L235 262L232 262L231 262L230 262L230 264L231 265L232 264L233 265L231 266L230 267L229 269L229 270L227 270L225 271L225 273L227 274L229 274L228 276L226 277L224 280L223 281L222 281L222 284L224 285L223 285L221 285L220 285L218 286L218 288L217 288L215 287L213 286L210 285L209 283L210 282L209 281L209 277L210 275L212 274L209 273L211 272L211 268L214 269L215 265L213 264L213 267L211 266L212 264L213 260L214 259L213 257L213 254L214 254L215 251L216 248L217 245L217 242L217 240L217 238L218 235L219 231L219 227L220 223L220 220L219 217L217 216L217 215L213 213L210 211L208 209L207 208L207 207L206 204L204 201L202 197L201 196L200 194L199 193L197 192L198 191L197 189L198 188L199 187L200 185L200 184L199 185L198 184L198 182L199 182L199 181L200 179L200 178L201 178L202 177L203 176L203 175L204 175L205 173L206 172L205 172L205 171L205 169L205 168L205 167L204 166L204 165L203 164L204 163L203 163L202 162L201 162L200 163L199 163L199 164L200 165L199 165L198 166L198 164L198 165L197 165L197 164L196 164L195 163L194 163L194 164L193 163L193 162L192 161L191 161L191 160L190 160L190 161L189 160L188 160L188 159L189 158L188 158L189 158L188 157L187 156L186 155L185 154L185 153L184 153L184 154L183 154L182 153L181 153L180 153L179 152L178 152L177 152L176 151L173 149L172 148L171 148L169 148L168 148L167 149L165 148L164 148L162 147L161 147L158 146L157 145L156 144L155 144L153 143L152 143L150 141L149 140L149 139L149 138L149 137L149 136L149 135L148 134L146 132L144 131L143 130L141 129L141 128L141 127L140 127L139 126L139 124L138 124L136 123L136 122L135 121L134 120L134 118L132 117L130 116L130 117L130 118L131 120L133 122L134 123L134 124L135 125L136 126L137 127L137 129L138 129L139 130L139 131L140 131L140 132L141 133L141 134L140 134L139 133L138 132L137 131L136 131L136 129L135 128L134 127L133 126L133 127L132 126L131 126L130 125L130 124L131 125L132 124L132 123L130 121L129 121L128 120L127 118L127 117L126 115L125 114L124 113L123 113L123 112L122 112L121 111L119 111L119 110L117 108L115 105L115 104L114 104L113 102L112 100L111 99L112 98L112 96L111 94L112 93L112 89L112 86L111 85L111 84L111 83L114 84L115 86L115 85L115 84L114 82L110 80L109 79L105 78L104 77L104 75L102 74L101 73L99 71L99 70L98 70L96 69L96 67L93 66L92 64L90 64L87 64L84 63L80 61L78 61L75 60L72 60L68 59L66 58L64 59L64 60L63 60L61 61L59 61L57 62L56 61L57 59L59 58L59 57L56 59L55 60L52 61L53 62L52 64L49 65L47 65L47 66L44 67L43 68L41 69L39 69L38 69L36 70L34 71L30 71L32 70L34 69L36 68L39 68L40 67L43 66L45 65L45 63L46 62L44 63L43 62L42 63L41 62L40 63L39 62L37 63L36 63L36 61L35 60L32 60L31 59L29 59L29 58L28 57L29 56L30 55L31 54L32 54L34 54L35 53L37 53L38 52L37 51L38 50L37 50L35 51L34 51L33 51L30 51L27 51L26 50L24 49L27 48L31 47L33 47L32 48L37 48L35 47L33 46L31 45L29 44L26 43L28 42L31 42L34 41L34 40L36 39L38 39L42 38L44 38L47 37L50 38L51 39L52 38L56 38L55 39L59 39L61 39L65 40L69 40L70 40L73 40L76 40L78 41L82 41L85 42L87 42L89 41L91 41L94 41L97 40L100 40L102 40L103 40L104 39L105 39L108 41L111 40L111 41L114 41L115 40L117 40L120 41L125 42L128 42L130 42L132 43L129 44L133 45L138 44L140 44L142 45L144 44L142 43L144 43L146 43L148 42L149 43L151 44L154 44L157 45L160 44L163 44L163 43L165 43L168 44L168 45L169 44L171 44L172 42L169 41L167 40L167 38L170 36L172 36L174 37L177 40L175 41L179 41ZM132 34L131 35L135 34L138 35L140 34L142 35L144 37L145 36L143 34L145 34L147 34L149 35L150 37L151 38L154 39L158 40L158 41L155 41L156 42L155 42L152 42L148 42L146 42L142 42L136 43L133 43L132 42L130 41L128 42L125 40L127 40L130 40L133 40L135 39L131 39L127 39L124 39L123 38L128 37L125 37L121 37L123 35L124 35L130 33L132 34ZM151 33L149 34L146 33L147 33L149 33L151 33ZM207 34L205 34L203 34L201 35L200 34L198 33L199 32L204 33L207 34ZM187 34L188 35L190 33L195 32L199 35L198 36L202 35L204 34L209 36L212 36L212 37L216 37L218 38L222 39L224 40L226 42L222 43L227 44L230 44L233 46L236 46L236 48L232 50L230 49L227 47L224 47L224 49L226 50L229 51L231 53L230 55L227 54L222 53L225 54L227 55L228 56L222 55L218 54L216 53L213 52L210 51L205 52L203 51L204 49L208 49L212 49L211 48L212 47L215 45L214 45L213 44L210 43L206 42L208 42L205 40L204 40L202 40L201 40L197 41L190 40L186 39L183 39L181 38L183 38L180 38L180 36L181 34L183 33L188 32L187 34ZM159 32L162 33L165 32L166 33L164 34L167 35L167 37L163 37L161 37L160 37L155 35L155 34L159 35L157 33L159 32ZM647 34L644 34L640 33L642 32L644 32L647 33L647 34ZM174 34L171 36L169 36L168 34L168 33L169 32L171 32L175 32L179 32L176 34L174 34ZM119 37L114 38L113 37L108 36L109 36L110 34L112 33L110 31L117 31L120 32L125 32L127 32L129 33L126 34L122 35L119 36L119 37ZM661 30L659 31L656 30L652 30L653 29L656 29L661 30ZM173 30L172 31L169 31L166 30L167 29L170 29L172 29L173 30ZM650 29L649 30L641 30L638 31L634 29L635 28L638 28L643 28L650 29ZM163 27L165 27L165 29L164 30L160 30L158 30L158 29L155 29L155 27L157 27L160 27L163 27ZM144 28L146 28L148 28L149 29L147 30L141 30L136 31L133 31L132 31L136 30L127 30L125 30L127 28L129 27L135 28L138 29L142 29L139 27L141 26L143 27L144 28ZM475 39L474 39L467 38L463 37L463 36L465 36L465 34L469 33L467 32L472 31L471 30L476 29L482 27L489 27L492 26L496 26L498 27L496 28L489 29L483 29L477 31L474 33L471 35L471 37L475 39ZM171 26L173 26L177 26L179 27L178 28L180 28L182 29L184 29L187 29L190 29L194 28L198 29L200 29L200 30L199 31L196 31L194 31L188 31L184 31L180 31L175 30L174 29L174 28L172 27L168 27L166 26L167 26L171 26ZM128 25L127 26L126 27L124 27L120 28L117 28L114 28L118 26L122 25L125 25L128 25ZM172 25L171 25L168 25L167 24L171 24L173 25L172 25ZM140 25L136 25L133 25L135 24L137 24L140 24L140 25ZM409 24L405 25L401 25L403 24L402 23L406 23L407 24L409 24ZM141 23L138 23L135 23L137 22L138 22L141 23ZM168 24L165 24L164 24L163 23L163 22L165 22L166 22L169 23L168 24ZM160 23L161 24L157 24L154 23L150 23L152 23L149 22L149 21L153 22L158 22L160 23ZM570 23L559 24L563 22L564 21L566 21L571 23L570 23ZM397 21L403 22L398 23L397 24L395 25L394 26L392 26L388 25L389 25L386 24L382 22L381 21L386 20L387 21L390 21L391 20L394 20L397 21ZM411 19L415 20L412 21L406 21L400 21L400 20L397 20L395 19L401 19L404 19L406 19L411 19ZM462 19L460 19L458 19L458 20L455 20L453 20L454 19L450 19L454 18L457 18L457 19L458 18L460 18L463 19L462 19ZM560 22L556 22L550 22L547 21L545 20L542 19L548 18L552 17L556 19L560 20L560 22ZM186 21L188 21L186 22L182 23L178 24L174 23L172 22L174 21L170 21L168 21L167 20L168 19L169 18L171 18L175 17L178 19L181 19L184 19L186 21ZM223 14L228 14L233 14L236 15L231 16L226 17L225 17L229 17L224 18L221 19L218 20L214 21L212 21L206 21L209 22L208 22L209 23L207 24L204 24L203 25L200 26L201 26L204 26L199 28L194 27L188 27L185 27L181 27L181 26L184 26L183 24L185 24L190 25L187 24L184 23L186 22L189 22L190 21L187 21L186 19L192 20L193 20L196 19L192 19L185 19L181 18L180 17L177 17L177 16L180 16L182 16L186 15L189 15L191 15L194 15L195 14L198 14L201 14L207 14L209 14L214 14L219 14L223 14ZM306 13L318 15L315 15L307 15L296 16L297 16L304 16L310 16L314 16L316 17L314 18L319 17L328 16L334 17L336 17L327 19L326 19L320 20L325 20L322 21L321 22L321 25L323 26L320 26L317 27L320 28L321 30L319 30L321 31L317 32L319 32L318 33L316 33L313 33L315 35L315 36L311 35L310 35L313 36L316 37L316 39L313 39L311 38L309 37L310 38L307 40L313 40L315 40L310 41L305 43L299 44L296 44L294 45L292 47L287 48L286 48L283 49L280 49L279 50L279 52L278 53L274 55L275 56L274 58L273 60L270 60L267 58L263 58L262 57L260 55L257 53L256 51L255 50L253 48L253 46L252 46L254 43L257 43L258 42L258 40L256 41L255 41L253 41L251 41L250 39L251 38L253 38L257 39L254 38L252 37L250 37L248 37L251 35L249 34L248 33L245 31L243 30L243 29L237 28L233 28L228 28L223 28L221 27L217 26L222 25L226 25L218 25L213 24L214 23L221 22L229 21L229 20L224 20L226 19L233 18L236 17L235 16L239 16L246 16L252 16L254 16L259 15L264 16L267 16L271 17L266 16L266 15L273 14L280 14L283 13L290 13L306 13Z"/><g id="aDots"></g></svg>
+      <div class="mu sm" id="aMapTxt" style="margin-top:6px"></div>
+      <div class="mu sm" style="margin-top:6px">Same address + same browser counted as one device. Tap an address to look it up.</div>
+      <div class="list" id="aVis" style="margin-top:10px"><div class="mu">Loading...</div></div></div>`;
+    $("#aFrz").onchange = async e => {
+      const want = e.target.checked;
+      try { await api("/admin/freeze", {frozen: want}); toast(want ? "Everyone else is frozen" : "Controls are back on for everyone"); this.load(); }
+      catch (err) { toast(err.message); e.target.checked = !want; }
+    };
+    $("#aCodeGo").onclick = () => {
+      const c = $("#aCode").value.trim();
+      if (!/^[A-Za-z0-9]{4,32}$/.test(c)) return toast("Use 4 to 32 letters or numbers");
+      confirmBox("Change the general code?", "New code: " + c + "\nEveryone using the old code will be logged out.", "Change", async () => {
+        try { await api("/admin/code", {code: c}); $("#aCode").value = ""; toast("Code changed"); this.load(); } catch (e) { toast(e.message); }
+      });
+    };
+    $("#aRef").onclick = () => this.load();
+    $("#exGo").onclick = () => {
+      const hours = +$("#exH").value, speed = +$("#exS").value;
+      confirmBox("Start Y-axis exercise?", `The printer homes, lifts the nozzle, then moves Y back and forth for ${hours} h at ${speed} mm/s. Keep the build plate clear.`, "Start", async () => {
+        try { await api("/admin/exercise", {action: "start", hours, speed}); toast("Exercise started"); this.load(); } catch (e) { toast(e.message); }
+      });
+    };
+    $("#exStop").onclick = async () => { try { await api("/admin/exercise", {action: "stop"}); toast("Stopping (finishes the last few strokes)"); this.load(); } catch (e) { toast(e.message); } };
+    this.load();
+    clearInterval(this.t);
+    this.t = setInterval(() => { if (tab === "admin" && !document.hidden) this.load(); else if (tab !== "admin") clearInterval(this.t); }, 10000);
+  },
+  async load() {
+    try {
+      const s = await api("/admin/state");
+      if (document.activeElement !== $("#aFrz")) $("#aFrz").checked = !!s.frozen;
+      $("#aFrzTxt").textContent = s.frozen ? "Frozen: people on the general code can only watch the camera." : "People on the general code can only watch the camera. You keep full control.";
+      $("#aFrzTxt").style.color = s.frozen ? "var(--bad)" : "";
+      const ago = x => x < 60 ? "active now" : x < 3600 ? Math.floor(x / 60) + " min ago" : x < 86400 ? Math.floor(x / 3600) + " h ago" : Math.floor(x / 86400) + " d ago";
+      $("#aList").innerHTML = s.sessions.length ? s.sessions.map(r => `<div><div class="grow"><div style="font-weight:600">${esc(r.device)}${r.me ? ' <span class="mu sm">(this browser)</span>' : ""}</div>
+          <div class="fa sm">${esc(r.ip || "?")} · ${ago(r.seen_s)} · since ${new Date(r.since * 1000).toLocaleDateString()}</div></div>
+          <span class="chip" style="color:${r.role === "master" ? "var(--ac)" : s.frozen ? "var(--bad)" : "var(--mu)"}">${r.role === "master" ? "master" : s.frozen ? "frozen" : "general"}</span>
+          ${r.role === "general" ? `<button class="btn sm bad" data-kick="${esc(r.id)}">Log out</button>` : ""}</div>`).join("") : '<div class="mu">Nobody.</div>';
+      $("#aList").querySelectorAll("[data-kick]").forEach(b => b.onclick = async () => { try { await api("/admin/kick", {id: b.dataset.kick}); toast("Logged out"); this.load(); } catch (e) { toast(e.message); } });
+      const ex = await api("/admin/exercise");
+      $("#exChip").textContent = ex.running ? "running" : "off"; $("#exChip").style.color = ex.running ? "var(--ok)" : "";
+      $("#exGo").disabled = ex.running; $("#exStop").disabled = !ex.running;
+      $("#exSet").classList.toggle("hide", ex.running);
+      if (ex.running) $("#exTxt").textContent = `${ex.passes} back-and-forths so far · ${mins(ex.left_s / 60)} left · ${ex.speed} mm/s between Y${ex.range[0]} and Y${ex.range[1]}`;
+      else if (ex.reason) $("#exTxt").textContent = `Last run: ${ex.passes} back-and-forths, ${ex.reason}${ex.stopped ? " at " + new Date(ex.stopped * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : ""}.`;
+      const v = (await api("/admin/visitors")).visitors || [];
+      const when = t => { const d = new Date(t * 1000); return d.toLocaleDateString([], {month: "short", day: "numeric"}) + " " + d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); };
+      const spots = {};
+      v.forEach(r => { if (r.lat == null || r.lon == null) return; const k = r.place || (r.lat + "," + r.lon);
+        const s = spots[k] || (spots[k] = {lat: r.lat, lon: r.lon, place: r.place || "", n: 0}); s.n++; });
+      const sp = Object.values(spots).sort((a, b) => b.n - a.n);
+      $("#aVCount").textContent = v.length + (v.length === 1 ? " device" : " devices");
+      $("#aDots").innerHTML = sp.map(s => `<circle data-r="${Math.min(14, 3.5 + Math.sqrt(s.n) * 2).toFixed(1)}" cx="${((s.lon + 180) * 2).toFixed(1)}" cy="${((90 - s.lat) * 2).toFixed(1)}" r="${Math.min(14, 3.5 + Math.sqrt(s.n) * 2).toFixed(1)}" fill="var(--ac)" fill-opacity=".75" stroke="#fff" stroke-width="1"><title>${esc(s.place)}: ${s.n}</title></circle>`).join("");
+      mapZoom();
+      $("#aMapTxt").textContent = sp.length ? "Top: " + sp.slice(0, 5).map(s => `${s.place.split(", ").slice(0, 1).concat(s.place.split(", ").slice(-1)).filter((x, i, a) => a.indexOf(x) === i).join(", ")} (${s.n})`).join(" · ") : "Dots appear as visitor locations are looked up.";
+      $("#aVis").innerHTML = v.length ? v.map(r => `<div style="align-items:flex-start"><div class="grow">
+          <div class="row" style="gap:8px"><a href="https://ipinfo.io/${encodeURIComponent(r.ip)}" target="_blank" rel="noopener noreferrer" style="font-weight:650" class="num">${esc(r.ip)}</a>
+            ${r.role ? `<span class="chip" style="color:${r.role === "master" ? "var(--ac)" : "var(--ok)"}">${r.role}</span>` : '<span class="chip">viewer</span>'}
+            ${r.locked_s > 0 ? `<span class="chip" style="color:var(--bad)">locked ${Math.ceil(r.locked_s / 60)} min</span>` : ""}</div>
+          <div class="sm" style="margin-top:3px">${esc(r.place || "Location: looking up...")}</div>
+          <div class="sm">${esc(r.device)}</div>
+          <div class="fa sm">First ${when(r.first)} · last ${ago(Math.max(0, Date.now() / 1000 - r.last))}</div>
+          <div class="fa sm">Opened ${r.opens}× · watched ${r.watch_min} min · right codes ${r.ok} · wrong codes <span style="${r.bad ? "color:var(--bad)" : ""}">${r.bad}</span></div>
+          <details class="fa sm" style="margin-top:2px"><summary style="cursor:pointer">Browser details</summary><div style="word-break:break-all">${esc(r.ua || "none sent")}</div></details>
+        </div></div>`).join("") : '<div class="mu">Nobody yet.</div>';
+    } catch (e) { $("#aList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
+
+// ------------------------------------------------------------ visitor map: drag to move, wheel / pinch / buttons to zoom
+function mapZoom() {
+  const svg = $("#aMap");
+  if (!svg) return;
+  const W = 720, H = 360, MAXZ = 24;
+  if (!svg._v) svg._v = {x: 0, y: 0, w: W};
+  const v = svg._v;
+  const draw = () => {
+    v.w = Math.min(W, Math.max(W / MAXZ, v.w));
+    const h = v.w / 2;
+    v.x = Math.min(W - v.w, Math.max(0, v.x)); v.y = Math.min(H - h, Math.max(0, v.y));
+    svg.setAttribute("viewBox", `${v.x} ${v.y} ${v.w} ${h}`);
+    const k = v.w / W;                               // keep dots the same size on screen
+    svg.querySelectorAll("circle").forEach(c => { c.setAttribute("r", (+c.dataset.r * Math.max(k, 0.25)).toFixed(2)); c.setAttribute("stroke-width", k); });
+  };
+  const zoomAt = (f, px, py) => {                    // px,py: 0..1 position on the map
+    const nw = Math.min(W, Math.max(W / MAXZ, v.w / f));
+    v.x += (v.w - nw) * px; v.y += (v.w - nw) / 2 * py; v.w = nw; draw();
+  };
+  svg._draw = draw;
+  if (!svg._wired) {
+    svg._wired = true;
+    const box = document.createElement("div");      // zoom buttons over the map's top-right corner
+    box.style.cssText = "position:relative;margin-top:10px";
+    svg.parentNode.insertBefore(box, svg); box.appendChild(svg);
+    svg.style.marginTop = "0"; svg.style.touchAction = "none"; svg.style.cursor = "grab";
+    box.insertAdjacentHTML("afterbegin", '<div style="position:absolute;right:8px;top:8px;display:flex;gap:6px;z-index:1"><button class="btn sm" id="mzIn" aria-label="Zoom in">+</button><button class="btn sm" id="mzOut" aria-label="Zoom out">&minus;</button><button class="btn sm" id="mzReset">Reset</button></div>');
+    const pos = e => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r.width]; };
+    svg.addEventListener("wheel", e => { e.preventDefault(); const [px, py] = pos(e); zoomAt(e.deltaY < 0 ? 1.25 : 0.8, px, py); }, {passive: false});
+    const pts = new Map(); let last = null, pinch = null;
+    svg.addEventListener("pointerdown", e => { svg.setPointerCapture(e.pointerId); pts.set(e.pointerId, e); last = e; svg.style.cursor = "grabbing"; });
+    svg.addEventListener("pointermove", e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, e);
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()], d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        const mid = {clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2};
+        if (pinch) { const [px, py] = pos(mid); zoomAt(d / pinch, px, py); }
+        pinch = d; return;
+      }
+      if (last) { const [, , rw] = pos(e); v.x -= (e.clientX - last.clientX) * v.w / rw; v.y -= (e.clientY - last.clientY) * v.w / rw; draw(); }
+      last = e;
+    });
+    const up = e => { pts.delete(e.pointerId); pinch = null; last = pts.size ? [...pts.values()][0] : null; svg.style.cursor = "grab"; };
+    svg.addEventListener("pointerup", up); svg.addEventListener("pointercancel", up);
+    svg.addEventListener("dblclick", e => { const [px, py] = pos(e); zoomAt(2, px, py); });
+    $("#mzIn").onclick = () => zoomAt(1.6, .5, .5);
+    $("#mzOut").onclick = () => zoomAt(1 / 1.6, .5, .5);
+    $("#mzReset").onclick = () => { v.x = 0; v.y = 0; v.w = W; draw(); };
+  }
+  draw();
+}
+
+// ------------------------------------------------------------ start
+document.addEventListener("visibilitychange", () => { if (!document.hidden && unlocked) poll(); });
+(async () => {
+  try { const me = await (await fetch(BASE + "/me", {cache: "no-store"})).json(); frozen = !!me.frozen; setUnlocked(!!me.unlocked, me.role); }
+  catch (e) { setUnlocked(false); }
+})();
+</script>
+<script>window.VFX_IMG="#img";window.VFX_BOX="#cam";</script>
+<script>
+/* Video settings: per-viewer look of the camera feed (saved in this browser only). */
+(function(){
+  const IMG = document.querySelector(window.VFX_IMG), BOX = document.querySelector(window.VFX_BOX);
+  if (!IMG || !BOX) return;
+  const KEY = "pw_vfx", D = {bright:100, contrast:100, sat:100, hue:0, gray:false, invert:false, sepia:false, flipH:false, flipV:false, zoom:100, night:false};
+  let v = Object.assign({}, D);
+  try { Object.assign(v, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} };
+  function apply(){
+    const f = [`brightness(${v.bright}%)`, `contrast(${v.contrast}%)`, `saturate(${v.sat}%)`, `hue-rotate(${v.hue}deg)`];
+    if (v.gray) f.push("grayscale(1)");
+    if (v.sepia) f.push("sepia(1)");
+    if (v.invert) f.push("invert(1)");
+    if (v.night) f.push("grayscale(1) sepia(1) hue-rotate(70deg) saturate(3) brightness(1.2)");
+    IMG.style.filter = f.join(" ");
+    IMG.style.transform = `scale(${(v.flipH?-1:1)*v.zoom/100}, ${(v.flipV?-1:1)*v.zoom/100})`;
+    IMG.style.transformOrigin = "center";
+    BOX.style.overflow = "hidden";
+  }
+  const btn = document.createElement("button");
+  btn.type = "button"; btn.title = "Video settings"; btn.textContent = "⚙";
+  btn.style.cssText = "position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;width:38px;height:38px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:20px;cursor:pointer";
+  if (getComputedStyle(BOX).position === "static") BOX.style.position = "relative";
+  BOX.appendChild(btn);
+  const p = document.createElement("div");
+  p.style.cssText = "display:none;position:fixed;right:16px;top:70px;z-index:99;width:min(320px,calc(100vw - 32px));max-height:80vh;overflow:auto;background:#16181d;color:#eee;border:1px solid #333;border-radius:14px;padding:14px 16px;font:14px system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)";
+  const sl = (k,l,min,max,u) => `<label style="display:block;margin:8px 0">${l} <span id="vfx_${k}_v" style="float:right;opacity:.7"></span><input type="range" min="${min}" max="${max}" data-k="${k}" data-u="${u}" style="width:100%"></label>`;
+  const ck = (k,l) => `<label style="display:inline-flex;gap:6px;align-items:center;margin:6px 12px 6px 0"><input type="checkbox" data-k="${k}">${l}</label>`;
+  p.innerHTML = `<div style="display:flex;align-items:center;margin-bottom:6px"><b style="flex:1">Video settings</b><button type="button" id="vfx_x" style="background:none;border:0;color:#aaa;font-size:20px;cursor:pointer">×</button></div>
+    ${sl("bright","Brightness",20,250,"%")}${sl("contrast","Contrast",20,250,"%")}${sl("sat","Saturation",0,300,"%")}${sl("hue","Hue shift",0,360,"°")}${sl("zoom","Zoom",100,400,"%")}
+    <div>${ck("gray","Greyscale")}${ck("invert","Invert colors")}${ck("sepia","Sepia")}${ck("night","Night vision")}${ck("flipH","Flip sideways")}${ck("flipV","Flip upside down")}</div>
+    <button type="button" id="vfx_r" style="width:100%;margin-top:10px;padding:9px;border-radius:10px;border:0;background:#2a2d35;color:#eee;cursor:pointer">Reset</button>
+    <div style="font-size:12px;opacity:.6;margin-top:8px">Only changes what you see on this device.</div>`;
+  document.body.appendChild(p);
+  function sync(){
+    p.querySelectorAll("[data-k]").forEach(el => {
+      const k = el.dataset.k;
+      if (el.type === "checkbox") el.checked = !!v[k];
+      else { el.value = v[k]; p.querySelector(`#vfx_${k}_v`).textContent = v[k] + el.dataset.u; }
+    });
+    apply();
+  }
+  p.addEventListener("input", e => {
+    const el = e.target, k = el.dataset && el.dataset.k; if (!k) return;
+    v[k] = el.type === "checkbox" ? el.checked : +el.value; save(); sync();
+  });
+  btn.onclick = e => { e.stopPropagation(); p.style.display = p.style.display === "none" ? "block" : "none"; };
+  p.querySelector("#vfx_x").onclick = () => p.style.display = "none";
+  p.querySelector("#vfx_r").onclick = () => { v = Object.assign({}, D); save(); sync(); };
+  sync();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<title>PrintView · Train</title>
+<style>
+:root{
+  --bg:#0e0f11;--surface:#17191c;--surface2:#1e2125;--line:#2a2d33;
+  --text:#ece9e2;--muted:#8c9098;--faint:#5b5f66;
+  --accent:#f5a524;--ok:#3ccf8e;--warn:#f5a524;--danger:#ff5a4e;--info:#6aa8ff;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;--r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px)}
+.wrap{max-width:560px;margin:0 auto;padding:0 14px}
+header{display:flex;align-items:center;gap:10px;padding:12px 2px 10px}
+header a,header button.back{color:var(--muted);text-decoration:none;font-size:15px;background:none;border:0;padding:6px 8px 6px 0;cursor:pointer}
+header h1{margin:0;font-size:17px;flex:1}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-top:12px}
+h2{margin:0 0 10px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted);font-size:13px}
+.statusLine{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.badge{font:600 11px var(--mono);letter-spacing:.06em;padding:4px 8px;border-radius:99px;text-transform:uppercase;white-space:nowrap}
+.b-ok{background:rgba(60,207,142,.15);color:var(--ok)} .b-warn{background:rgba(245,165,36,.15);color:var(--warn)}
+.b-bad{background:rgba(255,90,78,.15);color:var(--danger)} .b-dim{background:var(--surface2);color:var(--muted)}
+.b-info{background:rgba(106,168,255,.15);color:var(--info)}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.cmp div{background:var(--surface2);border-radius:12px;padding:10px}
+.cmp label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.cmp b{font:600 22px var(--mono)} .cmp b em{font-style:normal;font-size:14px;color:var(--faint)}
+.cmp span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.cmp .mine{outline:1px solid rgba(60,207,142,.35)}
+.prog{display:flex;gap:8px;margin-top:10px}
+.prog>div{flex:1;background:var(--surface2);border-radius:12px;padding:10px}
+.prog b{font:600 18px var(--mono)} .prog label{display:block;font-size:12px;color:var(--muted)}
+.prog .bar{height:5px;background:var(--line);border-radius:9px;margin-top:6px;overflow:hidden}
+.prog .bar i{display:block;height:100%;background:var(--accent)}
+.row{display:flex;align-items:center;justify-content:space-between;padding:12px 0 2px;gap:12px}
+.row b{display:block;font-weight:600} .row span{font-size:12px;color:var(--muted)}
+.switch{position:relative;width:52px;height:32px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:var(--surface2);border:1px solid var(--line);border-radius:99px;transition:.2s;cursor:pointer}
+.switch span:before{content:"";position:absolute;width:24px;height:24px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:.2s}
+.switch input:checked+span{background:rgba(60,207,142,.25);border-color:rgba(60,207,142,.5)}
+.switch input:checked+span:before{transform:translateX(20px);background:var(--ok)}
+button.btn{appearance:none;border:0;border-radius:12px;height:46px;padding:0 16px;font-size:15px;font-weight:700;cursor:pointer;background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+button.btn.primary{background:var(--accent);color:#111;border:0}
+button.btn.good{background:var(--ok);color:#111;border:0}
+button.btn.bad{background:var(--danger);color:#fff;border:0}
+button.btn:disabled{opacity:.35}
+.tip{font-size:13px;color:var(--muted);line-height:1.5}
+.tip b{color:var(--text)}
+.tabs{display:flex;gap:6px;margin:16px 0 4px;overflow-x:auto}
+.tabs button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:99px;padding:7px 12px;font-weight:600;font-size:13px;white-space:nowrap;cursor:pointer}
+.tabs button.on{background:var(--text);color:#111;border-color:var(--text)}
+.print{display:flex;gap:12px;align-items:center;padding:10px;border-radius:14px;background:var(--surface);border:1px solid var(--line);margin-top:8px;cursor:pointer}
+.print img,.print .noimg{width:88px;height:50px;object-fit:cover;border-radius:8px;background:#000;flex:none}
+.print .noimg{display:grid;place-items:center;color:var(--faint);font-size:11px}
+.print .info{flex:1;min-width:0}
+.print .job{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.print .sub{font:12px var(--mono);color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:30px 10px;font-size:14px}
+/* review */
+.viewer{position:relative;border-radius:var(--r);overflow:hidden;background:#000;aspect-ratio:16/9;border:1px solid var(--line)}
+.viewer img{width:100%;height:100%;object-fit:contain;display:block}
+.viewer .ts{position:absolute;left:10px;top:10px;font:12px var(--mono);background:rgba(14,15,17,.75);padding:4px 8px;border-radius:8px}
+.viewer .lab{position:absolute;right:10px;top:10px}
+canvas{width:100%;height:56px;display:block;margin-top:12px;border-radius:10px;background:var(--surface2);touch-action:none}
+input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--accent);height:28px}
+.steps{display:flex;gap:8px;justify-content:space-between}
+.steps button{flex:1}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:3px}
+.actions{display:grid;gap:8px;margin-top:14px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,40px);opacity:0;
+  background:var(--text);color:#111;padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;transition:.25s;z-index:30;max-width:90vw}
+.toast.show{transform:translate(-50%,0);opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap" id="listView">
+  <header><a href="/">‹ Live</a><h1>Train detection</h1></header>
+
+  <div class="card">
+    <div class="statusLine"><h2 style="margin:0">Your model</h2><span class="badge b-dim" id="mBadge">-</span></div>
+    <div id="mBody" class="muted" style="margin-top:8px"></div>
+    <div class="cmp" id="cmp" style="display:none">
+      <div class="mine"><label>Your model</label><b id="cMine">-</b><span id="cMineSub"></span></div>
+      <div><label>Obico stock</label><b id="cObico">-</b><span id="cObicoSub"></span></div>
+    </div>
+    <div class="prog" id="prog">
+      <div><label>Failed prints</label><b id="pF">0</b><span class="muted" id="pFn"></span><div class="bar"><i id="pFb"></i></div></div>
+      <div><label>Good prints</label><b id="pG">0</b><span class="muted" id="pGn"></span><div class="bar"><i id="pGb"></i></div></div>
+    </div>
+    <div class="row">
+      <div><b>Use my model</b><span>When trained, it makes the pause decision</span></div>
+      <label class="switch"><input type="checkbox" id="useCustom"><span></span></label>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+      <button class="btn primary" id="trainBtn">Train now</button>
+      <span class="muted" id="trainState"></span>
+    </div>
+  </div>
+
+  <div class="card tip">
+    <b>How to train it fast.</b> Every print is recorded automatically. Prints that finish cleanly are marked good on their own.
+    For failures, open the print, slide to the first frame where it went wrong, and tap <b>Failure started here</b>.
+    You need 3 failed and 3 good prints to start; 10+ failures in different colors gets you a strong model.
+    To get failures on purpose: print a tall thin tower and knock it over mid-print, or skip glue on PETG/ABS.
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-f="review" class="on">Needs review <span id="nReview"></span></button>
+    <button data-f="all">All</button>
+    <button data-f="failed">Failures</button>
+    <button data-f="good">Good</button>
+    <button data-f="ignore">Ignored</button>
+  </div>
+  <div id="prints"></div>
+</div>
+
+<div class="wrap" id="reviewView" style="display:none">
+  <header><button class="back" id="backBtn">‹ Prints</button><h1 id="rJob" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Print</h1></header>
+  <div class="viewer"><img id="rImg" alt=""><span class="ts" id="rTs"></span><span class="lab badge" id="rLab"></span></div>
+  <input type="range" id="rSlider" min="0" max="0" value="0">
+  <div class="steps">
+    <button class="btn" data-step="-30">-5m</button><button class="btn" data-step="-1">‹</button>
+    <button class="btn" data-step="1">›</button><button class="btn" data-step="30">+5m</button>
+  </div>
+  <canvas id="rChart"></canvas>
+  <div class="legend"><span><i style="background:var(--accent)"></i>Obico</span><span><i style="background:var(--info)"></i>Your model</span><span><i style="background:var(--danger)"></i>Marked failure</span></div>
+  <div class="muted" id="rInfo" style="margin-top:10px"></div>
+  <div class="actions">
+    <button class="btn bad" id="aFail">Failure started here</button>
+    <button class="btn good" id="aGood">Whole print was fine</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn" id="aIgnore">Ignore print</button>
+      <button class="btn" id="aDelete">Delete</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let filter="review", prints=[], cur=null, ticks=[], meta=null, idx=0;
+function toast(m){const t=$("toast");t.textContent=m;t.className="toast show";clearTimeout(t._h);t._h=setTimeout(()=>t.className="toast",2200);}
+async function j(url,opt){const r=await fetch(url,opt);if(r.status===401){location.href="/login";throw 0;}return r.json();}
+const post=(u,b)=>j(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function dur(s){s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?`${h}h ${m}m`:`${m}m`;}
+function when(t){const d=new Date(t*1000);return d.toLocaleDateString([], {month:"short",day:"numeric"})+" "+d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});}
+function badge(m){
+  if(m.status==="recording") return ['<span class="badge b-info">recording</span>'];
+  if(m.label==="good") return [`<span class="badge b-ok">${m.auto?"good · auto":"good"}</span>`];
+  if(m.label==="failed") return ['<span class="badge b-bad">failure</span>'];
+  if(m.label==="ignore") return ['<span class="badge b-dim">ignored</span>'];
+  return ['<span class="badge b-warn">review</span>'];
+}
+
+async function loadTrain(){
+  const s = await j("/api/train"); const r=s.report, c=s.counts;
+  $("pF").textContent=c.failed; $("pG").textContent=c.good;
+  $("pFn").textContent=" / "+s.min_failed+" min"; $("pGn").textContent=" / "+s.min_good+" min";
+  $("pFb").style.width=Math.min(100,c.failed/s.min_failed*100)+"%"; $("pGb").style.width=Math.min(100,c.good/s.min_good*100)+"%";
+  $("nReview").textContent=c.review?`(${c.review})`:"";
+  $("trainState").textContent = s.running ? "Training..." : s.error ? "Error: "+s.error : (r&&r.trained_at? "Last run "+when(r.trained_at):"");
+  $("trainBtn").disabled = s.running;
+  if(s.trained && r && r.ok){
+    $("mBadge").className="badge b-ok"; $("mBadge").textContent="trained";
+    const cv=r.cv, ob=r.obico;
+    $("mBody").innerHTML = `Measured on your own ${r.failed_prints+r.good_prints} prints with cross-validation (each print tested by a model that never saw it).`;
+    $("cmp").style.display="grid";
+    $("cMine").innerHTML=`${cv.caught}<em>/${cv.failed}</em>`;
+    $("cMineSub").textContent=`caught · ${cv.false_alarms} false alarm${cv.false_alarms==1?"":"s"}`+(cv.median_delay_s!=null?` · ~${cv.median_delay_s}s to catch`:"");
+    $("cObico").innerHTML=`${ob.caught}<em>/${ob.failed}</em>`;
+    $("cObicoSub").textContent=`caught · ${ob.false_alarms} false alarm${ob.false_alarms==1?"":"s"}`+(ob.median_delay_s!=null?` · ~${ob.median_delay_s}s`:"");
+  } else {
+    $("mBadge").className="badge b-warn"; $("mBadge").textContent= s.trained?"trained":"collecting";
+    $("mBody").textContent = s.trained ? (r&&r.message||"") : "Obico's stock model is protecting your prints while you collect data. Label prints below.";
+    $("cmp").style.display="none";
+  }
+  const st = await j("/api/status"); $("useCustom").checked=!!st.settings.use_custom;
+}
+async function loadPrints(){
+  prints = await j("/api/prints");
+  const list = prints.filter(m=> filter==="all" ? true : filter==="review" ? (!m.label && m.status!=="recording") : m.label===filter);
+  $("prints").innerHTML = list.length ? list.map(m=>{
+    const d = (m.ended||Date.now()/1000)-m.started;
+    const img = m.thumb!=null ? `<img loading="lazy" src="/api/prints/${m.id}/frame/${m.thumb}">` : `<div class="noimg">${m.frames_pruned?"pruned":"no frames"}</div>`;
+    return `<div class="print" data-id="${m.id}">${img}<div class="info"><div class="job">${esc(m.job)}</div>
+      <div class="sub">${when(m.started)} · ${dur(d)} · ${esc((m.end_state||"").toLowerCase())}${m.flagged?" · flagged":""}</div></div>${badge(m)}</div>`;
+  }).join("") : `<div class="empty">${filter==="review"?"Nothing to review. Failed, stopped or flagged prints show up here.":"No prints here yet."}</div>`;
+  document.querySelectorAll(".print").forEach(el=>el.onclick=()=>openPrint(el.dataset.id));
+}
+
+async function openPrint(id){
+  const d = await j("/api/prints/"+id); meta=d.meta; ticks=d.ticks; cur=id;
+  $("listView").style.display="none"; $("reviewView").style.display="block"; scrollTo(0,0);
+  $("rJob").textContent=meta.job;
+  const n=Math.max(1,ticks.length);
+  $("rSlider").max=n-1;
+  idx = meta.label==="failed" ? meta.fail_start : (meta.flagged ? firstHigh() : Math.floor(n/2));
+  $("rSlider").value=idx;
+  const rec = meta.status==="recording";
+  $("aFail").disabled = rec || meta.frames_pruned; $("aGood").disabled=rec; $("aIgnore").disabled=rec; $("aDelete").disabled=rec;
+  $("rInfo").textContent = rec ? "Still recording. Label it when it ends." :
+    meta.frames_pruned ? "Old frames were pruned to save space; features are kept, so it still trains." :
+    `${ticks.length} frames, one every 10 s. Ended: ${String(meta.end_state||"").toLowerCase()}${meta.flagged?" (detector flagged it)":""}.`;
+  showFrame(); drawChart();
+}
+function firstHigh(){ let best=0,bi=Math.floor(ticks.length/2); ticks.forEach((t,i)=>{const v=Math.max(t.po||0,t.pc||0); if(v>best){best=v;bi=i;}}); return bi; }
+function showFrame(){
+  idx=Math.max(0,Math.min(ticks.length-1,idx)); $("rSlider").value=idx;
+  if(!meta.frames_pruned && ticks.length) $("rImg").src=`/api/prints/${cur}/frame/${idx}`;
+  const t=ticks[idx]; $("rTs").textContent = t ? dur(t.t-meta.started).replace(/^0m$/,"0m")+" in" : "";
+  const lab = meta.label==="failed" ? (idx>=meta.fail_start?"failure":"fine") : meta.label==="good"?"fine":meta.label==="ignore"?"ignored":"";
+  $("rLab").textContent=lab; $("rLab").className="lab badge "+(lab==="failure"?"b-bad":lab==="fine"?"b-ok":lab?"b-dim":"");
+  $("rLab").style.display=lab?"":"none";
+  drawChart();
+}
+function drawChart(){
+  const c=$("rChart"), dpr=devicePixelRatio||1, W=c.clientWidth, H=c.clientHeight;
+  c.width=W*dpr; c.height=H*dpr; const g=c.getContext("2d"); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const n=ticks.length; if(n<2) return; const x=i=>i/(n-1)*W;
+  if(meta.label==="failed"){ g.fillStyle="rgba(255,90,78,.18)"; g.fillRect(x(meta.fail_start),0,W-x(meta.fail_start),H); }
+  const maxPo=Math.max(1.5,...ticks.map(t=>t.po||0));
+  const line=(get,col,scale)=>{g.strokeStyle=col;g.lineWidth=1.5;g.beginPath();let st=false;
+    ticks.forEach((t,i)=>{const v=get(t); if(v==null){st=false;return;} const y=H-4-(Math.min(v,scale)/scale)*(H-8); st?g.lineTo(x(i),y):g.moveTo(x(i),y); st=true;}); g.stroke();};
+  line(t=>t.po,"#f5a524",maxPo); line(t=>t.pc,"#6aa8ff",1);
+  g.fillStyle="#ece9e2"; g.fillRect(x(idx)-1,0,2,H);
+}
+function chartSeek(e){const r=$("rChart").getBoundingClientRect(); idx=Math.round((e.clientX-r.left)/r.width*(ticks.length-1)); showFrame();}
+$("rChart").addEventListener("pointerdown",e=>{chartSeek(e);$("rChart").setPointerCapture(e.pointerId);});
+$("rChart").addEventListener("pointermove",e=>{if(e.buttons) chartSeek(e);});
+$("rSlider").oninput=e=>{idx=+e.target.value;showFrame();};
+document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{idx+= +b.dataset.step; showFrame();});
+async function label(l,extra){
+  const r=await post(`/api/prints/${cur}/label`,{label:l,...extra});
+  if(r.ok){ toast(l==="failed"?"Marked failure from here":l==="good"?"Marked good":l==="ignore"?"Ignored":"Saved"); meta=r.meta; showFrame();
+    setTimeout(back,500); } else toast(r.error||"Failed");
+}
+$("aFail").onclick=()=>label("failed",{fail_start:idx});
+$("aGood").onclick=()=>label("good");
+$("aIgnore").onclick=()=>label("ignore");
+$("aDelete").onclick=async()=>{ if(!confirm("Delete this print's recording?")) return; await post(`/api/prints/${cur}/delete`); toast("Deleted"); back(); };
+function back(){ $("reviewView").style.display="none"; $("listView").style.display="block"; cur=null; loadPrints(); loadTrain(); }
+$("backBtn").onclick=back;
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{filter=b.dataset.f;document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x===b));loadPrints();});
+$("trainBtn").onclick=async()=>{ await post("/api/train"); toast("Training started"); const iv=setInterval(async()=>{await loadTrain(); if(!$("trainBtn").disabled){clearInterval(iv);}},1500); };
+$("useCustom").onchange=e=>post("/api/settings",{use_custom:e.target.checked}).then(()=>toast(e.target.checked?"Your model is in charge":"Using Obico stock"));
+document.addEventListener("keydown",e=>{ if(!cur) return; if(e.key==="ArrowLeft"){idx--;showFrame();} if(e.key==="ArrowRight"){idx++;showFrame();} });
+loadTrain(); loadPrints();
+</script>
+</body>
+</html>

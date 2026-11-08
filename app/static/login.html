@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<title>PrintView</title>
+<style>
+html,body{margin:0;height:100%;background:#0e0f11;color:#ece9e2;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+body{display:grid;place-items:center;padding:24px;box-sizing:border-box}
+form{width:100%;max-width:320px;text-align:center}
+h1{font-size:20px;margin:0 0 6px}
+p{color:#8c9098;margin:0 0 22px;font-size:14px}
+input{width:100%;box-sizing:border-box;height:58px;border-radius:14px;border:1px solid #2a2d33;background:#17191c;color:#ece9e2;
+  font:600 26px ui-monospace,Menlo,monospace;text-align:center;letter-spacing:.3em;outline:none}
+input:focus{border-color:#f5a524}
+button{margin-top:12px;width:100%;height:54px;border:0;border-radius:14px;background:#f5a524;color:#111;font-size:17px;font-weight:700}
+.err{color:#ff5a4e;min-height:20px;margin-top:12px;font-size:14px}
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>PrintView</h1>
+  <p>Enter your PIN</p>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" autofocus>
+  <button>Unlock</button>
+  <div class="err" id="err"></div>
+</form>
+<script>
+document.getElementById("f").onsubmit = async e => {
+  e.preventDefault();
+  const r = await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({pin:document.getElementById("pin").value})});
+  if(r.ok) location.href="/"; else { document.getElementById("err").textContent="Wrong PIN"; document.getElementById("pin").value=""; }
+};
+</script>
+</body>
+</html>
