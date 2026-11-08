@@ -1,12 +1,17 @@
 # PrintView
 
-Live camera, pause / resume / stop, chamber light, and local spaghetti detection for a Bambu Lab P1S in LAN-only + Developer Mode. Runs on a Raspberry Pi 5. You control it from a phone web app that you add to your home screen.
+Live camera, pause / resume / stop, chamber light, and local spaghetti detection for a Bambu Lab P1S in LAN-only + Developer Mode. Runs on a Raspberry Pi 5. You control it from a phone web app, the Android app, or a public web link.
+
+**Live demo (my printer, view-only without a code):** https://printwatch.tail9ea1be.ts.net:10000/yDTJstKkrryn8tdm
+
+**Android app:** download `PrintView.apk` from [Releases](../../releases). It works with any PrintView Pi: open it, enter your Pi's address, and pair.
+
+Features: live camera with per-viewer video settings, controls, AMS editing, print from SD (newest first), skip objects, printer HMS errors in plain English, custom-trainable spaghetti detection, per-layer timelapses, an Arduino relay bed controller with predictive temperature control, a public web link with view-only visitors and a master command center, and a data-streams view.
 
 ## Install on the Pi
 
 ```bash
-# copy printwatch.zip to the Pi first (see below), then:
-unzip printwatch.zip && cd printwatch
+git clone https://github.com/wvfouram/printview.git && cd printview
 chmod +x install.sh
 ./install.sh
 ```
