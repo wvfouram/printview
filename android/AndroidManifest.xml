@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.printwatch"
+    android:versionCode="16"
+    android:versionName="2.12">
+
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:label="PrintWatch"
+        android:icon="@drawable/ic_launcher"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:usesCleartextTraffic="true"
+        android:allowBackup="false">
+
+        <activity android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".ControlsActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".FilesActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".StartActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".JobActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".TimelapseActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <provider android:name=".VideoProvider"
+            android:authorities="dev.printwatch.videos"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+        <activity android:name=".VideoFxActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".StreamActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".CommandActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".TrainActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ReviewActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+    </application>
+</manifest>

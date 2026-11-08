@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PrintView">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<link rel="icon" href="/static/icon-192.png">
+<title>PrintView</title>
+<style>
+:root{
+  --bg:#0e0f11;--surface:#17191c;--surface2:#1e2125;--line:#2a2d33;
+  --text:#ece9e2;--muted:#8c9098;--faint:#5b5f66;
+  --accent:#f5a524;--ok:#3ccf8e;--warn:#f5a524;--danger:#ff5a4e;--info:#6aa8ff;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px)}
+.wrap{max-width:560px;margin:0 auto;padding:0 14px}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 2px 10px}
+.brand{font-weight:700;letter-spacing:.02em;font-size:17px;display:flex;align-items:center;gap:8px}
+.brand i{width:10px;height:10px;border-radius:3px;background:var(--accent);display:inline-block;transform:rotate(45deg)}
+.links{display:flex;gap:12px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--faint);margin-right:5px;vertical-align:1px}
+.dot.on{background:var(--ok)} .dot.bad{background:var(--danger)}
+
+/* camera */
+.cam{position:relative;border-radius:var(--r);overflow:hidden;background:#000;aspect-ratio:16/9;border:1px solid var(--line)}
+.cam img{width:100%;height:100%;object-fit:contain;display:block}
+.cam .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px;text-align:center;padding:20px}
+.pill{position:absolute;left:10px;top:10px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700;
+  letter-spacing:.06em;background:rgba(14,15,17,.75);backdrop-filter:blur(6px);display:flex;gap:6px;align-items:center}
+.pill .dot{margin:0}
+.age{position:absolute;right:10px;top:10px;font:11px var(--mono);color:#cfd2d6;background:rgba(14,15,17,.6);padding:4px 8px;border-radius:8px}
+.camBtn{position:absolute;right:10px;bottom:10px;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.15);
+  background:rgba(14,15,17,.7);color:var(--text);display:grid;place-items:center;cursor:pointer}
+.camBtn.lit{color:var(--accent);border-color:rgba(245,165,36,.5)}
+.camBtn.fs{right:58px}
+.camBtn svg{width:20px;height:20px}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-top:12px}
+.job{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.big{display:flex;align-items:baseline;justify-content:space-between;margin-top:6px}
+.pct{font:700 44px/1 var(--mono);letter-spacing:-.02em}
+.pct small{font-size:20px;color:var(--muted)}
+.eta{text-align:right;font-family:var(--mono)}
+.eta b{font-size:18px;display:block}
+.eta span{font-size:12px;color:var(--muted)}
+.bar{height:8px;background:var(--surface2);border-radius:99px;overflow:hidden;margin:12px 0 10px}
+.bar>div{height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .6s}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--surface2);border-radius:12px;padding:9px 10px}
+.stat label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stat b{font:600 16px var(--mono)}
+.stat b em{font-style:normal;color:var(--faint);font-size:12px}
+
+/* controls */
+.controls{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:12px}
+button.act{appearance:none;border:0;border-radius:14px;height:60px;font-size:17px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;color:#111;background:var(--accent);transition:transform .08s,opacity .2s}
+button.act:active{transform:scale(.97)}
+button.act svg{width:22px;height:22px}
+button.act.resume{background:var(--ok)}
+button.act.stop{background:transparent;color:var(--danger);border:1.5px solid rgba(255,90,78,.55)}
+button.act:disabled{opacity:.3;pointer-events:none}
+
+/* spaghetti */
+.secHead{display:flex;justify-content:space-between;align-items:center}
+.secHead h2{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.watchState{font:12px var(--mono);color:var(--muted)}
+.meter{position:relative;height:10px;border-radius:99px;background:var(--surface2);margin:16px 0 6px}
+.meter .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--ok);width:0;transition:width .6s,background .3s}
+.meter .mark{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--faint)}
+.meterLbl{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--faint)}
+.row{display:flex;align-items:center;justify-content:space-between;padding:12px 0 2px;gap:12px}
+.row .lbl b{display:block;font-weight:600}
+.row .lbl span{font-size:12px;color:var(--muted)}
+.switch{position:relative;width:52px;height:32px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:var(--surface2);border:1px solid var(--line);border-radius:99px;transition:.2s;cursor:pointer}
+.switch span:before{content:"";position:absolute;width:24px;height:24px;left:3px;top:3px;border-radius:50%;background:var(--muted);transition:.2s}
+.switch input:checked+span{background:rgba(60,207,142,.25);border-color:rgba(60,207,142,.5)}
+.switch input:checked+span:before{transform:translateX(20px);background:var(--ok)}
+.seg{display:flex;background:var(--surface2);border-radius:10px;padding:3px;gap:3px}
+.seg button{border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--line);color:var(--text)}
+.trainLink{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--surface2);color:var(--muted);text-decoration:none;font-size:13px}
+.trainLink span:first-child{flex:1}
+.trainLink b{color:var(--accent)}
+.trainLink #reviewBadge:not(:empty){background:var(--warn);color:#111;font:700 11px var(--mono);padding:2px 7px;border-radius:99px}
+.detImg{margin-top:12px;border-radius:12px;overflow:hidden;border:1px solid var(--line);display:none}
+.detImg img{width:100%;display:block}
+.detImg div{font-size:12px;color:var(--muted);padding:6px 10px}
+
+/* activity */
+.ev{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.ev:first-of-type{border-top:0}
+.ev time{font:12px var(--mono);color:var(--faint);flex:none;width:62px;padding-top:2px}
+.ev.detect span,.ev.fail span{color:var(--danger)} .ev.warn span{color:var(--warn)} .ev.done span{color:var(--ok)}
+.muted{color:var(--muted);font-size:13px}
+.notice{border-color:rgba(255,90,78,.4);background:rgba(255,90,78,.08);font-size:13px;display:none}
+
+/* sheet + toast */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);border-radius:20px 20px 0 0;
+  padding:22px 18px calc(22px + env(safe-area-inset-bottom));z-index:21;transform:translateY(110%);transition:transform .25s,visibility .25s;visibility:hidden}
+.sheet.open{transform:none;visibility:visible}
+.sheet h3{margin:0 0 6px;font-size:19px}
+.sheet p{margin:0 0 18px;color:var(--muted)}
+.hold{position:relative;overflow:hidden;width:100%;background:var(--danger)!important;color:#fff!important;border:0!important;user-select:none;-webkit-user-select:none;touch-action:none}
+.hold i{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(0,0,0,.25)}
+.hold span{position:relative}
+.cancel{margin-top:10px;width:100%;height:50px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:16px;font-weight:600}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,40px);opacity:0;
+  background:var(--text);color:#111;padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;transition:.25s;z-index:30;max-width:90vw}
+.toast.show{transform:translate(-50%,0);opacity:1}
+.toast.err{background:var(--danger);color:#fff}
+.fsView{position:fixed;inset:0;background:#000;z-index:40;display:none;align-items:center;justify-content:center}
+.fsView img{max-width:100vw;max-height:100vh;object-fit:contain}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><i></i>PrintView</div>
+    <div class="links">
+      <span><span class="dot" id="dPrinter"></span>printer</span>
+      <span><span class="dot" id="dCam"></span>camera</span>
+    </div>
+  </header>
+
+  <div class="card notice" id="notice"></div>
+
+  <div class="cam" id="cam">
+    <img id="camImg" alt="Printer camera">
+    <div class="empty" id="camEmpty">Connecting to camera...</div>
+    <div class="pill" id="statePill"><span class="dot" id="stateDot"></span><span id="stateTxt">-</span></div>
+    <div class="age" id="camAge"></div>
+    <button class="camBtn fs" id="fsBtn" aria-label="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button class="camBtn" id="lightBtn" aria-label="Chamber light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.6 1 2.5h6c0-.9.2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg></button>
+  </div>
+
+  <div class="card">
+    <div class="job" id="job">No active print</div>
+    <div class="big">
+      <div class="pct" id="pct">--<small>%</small></div>
+      <div class="eta"><b id="remain">--</b><span id="etaClock">remaining</span></div>
+    </div>
+    <div class="bar"><div id="bar"></div></div>
+    <div class="stats">
+      <div class="stat"><label>Layer</label><b id="layer">--</b></div>
+      <div class="stat"><label>Nozzle</label><b id="nozzle">--</b></div>
+      <div class="stat"><label>Bed</label><b id="bed">--</b></div>
+    </div>
+  </div>
+
+  <div class="card" id="hmsCard" style="display:none;border:1px solid var(--danger)">
+    <div class="secHead"><h2>Printer errors</h2><span class="watchState" id="hmsCount"></span></div>
+    <div id="hmsList"></div>
+  </div>
+
+  <div class="controls">
+    <button class="act" id="pauseBtn" disabled></button>
+    <button class="act stop" id="stopBtn" disabled><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Stop</button>
+  </div>
+
+  <div class="card" id="bedCard">
+    <div class="secHead"><h2>Bed servo</h2><span class="watchState" id="bcState">-</span></div>
+    <div id="bcBanner" style="display:none;background:var(--danger);color:#fff;border-radius:10px;padding:10px 12px;margin:8px 0;font-weight:600"></div>
+    <div class="stats">
+      <div class="stat"><label>Printer bed</label><b id="bcBed">--</b></div>
+      <div class="stat"><label>Servo</label><b id="bcServo">--</b></div>
+      <div class="stat"><label>Uno</label><b id="bcUno">--</b></div>
+    </div>
+    <div id="bcReason" style="font-size:13px;opacity:.7;margin:8px 0"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="act" id="bcOpen" style="flex:1">Test open</button>
+      <button class="act" id="bcClose" style="flex:1">Test close</button>
+      <button class="act" id="bcAuto" style="flex:1">Auto</button>
+      <button class="act" id="bcReset" style="flex:1">Reset fault</button>
+    </div>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:13px;opacity:.7">Raw serial log</summary>
+      <pre id="bcLog" style="font-size:11px;max-height:220px;overflow:auto;white-space:pre-wrap;margin:6px 0 0"></pre></details>
+  </div>
+
+  <div class="card" id="tlCard">
+    <div class="secHead"><h2>Timelapse</h2><span class="watchState" id="tlState">-</span></div>
+    <div id="tlMsg" style="font-size:13px;opacity:.7;margin:6px 0"></div>
+    <div id="tlList"></div>
+  </div>
+
+  <div class="card">
+    <div class="secHead"><h2>Spaghetti watch</h2><span class="watchState" id="watchState">-</span></div>
+    <a class="trainLink" href="/train"><span id="modelLine">Obico stock model</span><span id="reviewBadge"></span><b>Train ›</b></a>
+    <div class="meter" id="meter"><div class="fill" id="meterFill"></div><div class="mark" id="markWarn"></div><div class="mark" id="markPause"></div></div>
+    <div class="meterLbl"><span>clean</span><span>warn</span><span>pause</span></div>
+    <div class="row">
+      <div class="lbl"><b>Auto-pause</b><span>Pause the print when spaghetti is detected</span></div>
+      <label class="switch"><input type="checkbox" id="autoPause"><span></span></label>
+    </div>
+    <div class="row">
+      <div class="lbl"><b>Sensitivity</b><span>Higher catches more, with more false alarms</span></div>
+      <div class="seg" id="sens"><button data-v="low">Low</button><button data-v="medium">Med</button><button data-v="high">High</button></div>
+    </div>
+    <div class="detImg" id="detBox"><img id="detImg" alt="Last detection"><div>Last flagged frame</div></div>
+  </div>
+
+  <div class="card">
+    <div class="secHead"><h2>Activity</h2><span class="watchState" id="notifyState"></span></div>
+    <div id="events" style="margin-top:8px"><div class="muted">Nothing yet.</div></div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <h3>Stop this print?</h3>
+  <p>This cancels the job on the printer. It can't be resumed.</p>
+  <button class="act hold" id="holdBtn"><i id="holdFill"></i><span>Hold to stop</span></button>
+  <button class="cancel" id="cancelBtn">Cancel</button>
+</div>
+<div class="fsView" id="fsView"><img id="fsImg" alt=""></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>';
+const STATES = {
+  RUNNING:["PRINTING","var(--ok)"], PAUSE:["PAUSED","var(--warn)"], PREPARE:["PREPARING","var(--info)"],
+  SLICING:["PREPARING","var(--info)"], FINISH:["FINISHED","var(--ok)"], FAILED:["STOPPED","var(--danger)"],
+  IDLE:["IDLE","var(--muted)"], UNKNOWN:["OFFLINE","var(--faint)"]
+};
+let S = null, busy = false;
+
+function toast(msg, err){
+  const t=$("toast"); t.textContent=msg; t.className="toast show"+(err?" err":"");
+  clearTimeout(t._h); t._h=setTimeout(()=>t.className="toast"+(err?" err":""),2600);
+}
+function buzz(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
+async function post(url, body){
+  const r = await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(r.status===401){ location.href="/login"; throw new Error("auth"); }
+  return r.json().catch(()=>({}));
+}
+let tlSeen="";
+function renderTl(t){
+  if(!t) return;
+  $("tlState").textContent = !t.ready ? "Waiting for SSD" : t.recording ? "● REC layer "+(t.layer||"-")+" · "+t.frames : t.rendering ? "Rendering" : "Ready";
+  $("tlMsg").textContent = (t.ready?"":`Needs ${t.need_gb} GB free, ${t.free_gb} GB now. Turns on by itself once PrintView runs from the SSD. `)+(t.msg||"");
+  const key = [t.recording,t.rendering,t.frames>0,t.msg].join("|");
+  if(key!==tlSeen){ tlSeen=key; loadTl(); }
+}
+async function loadTl(){
+  try{
+    const r = await (await fetch("/api/timelapse")).json();
+    $("tlList").innerHTML = r.items.slice(0,10).map(i=>`<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line,#333)">
+      <div style="flex:1;font-size:13px"><b>${esc(i.job||i.id)}</b><br><span style="opacity:.6">${esc(i.id)} · ${i.frames} layers${i.mb?" · "+i.mb+" MB":""}</span></div>
+      ${i.video?`<a class="act" style="text-decoration:none;padding:6px 10px" href="/api/timelapse/${i.id}/timelapse.mp4" target="_blank">Play</a>`:""}
+      ${i.rendering?"<span style='font-size:12px'>rendering…</span>":i.queued?"<span style='font-size:12px'>queued</span>":`<button class="act" style="padding:6px 10px" onclick="tlRender('${i.id}')">${i.video?"Re-render":"Render"}</button>`}
+    </div>`).join("") || "<div style='font-size:13px;opacity:.6'>No timelapses yet.</div>";
+  }catch(e){}
+}
+async function tlRender(id){ await fetch(`/api/timelapse/${id}/render`,{method:"POST"}); tlSeen=""; }
+function renderHms(h){
+  const items = (h&&h.items)||[];
+  $("hmsCard").style.display = items.length ? "" : "none";
+  if(!items.length) return;
+  $("hmsCount").textContent = items.length+" active";
+  $("hmsList").innerHTML = items.map(i=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.08)">
+    <div style="font-size:12px;opacity:.7"><b style="color:${i.level==="Fatal"||i.level==="Serious"||i.level==="Print error"?"var(--danger)":"var(--accent,#f5a623)"}">${esc(i.level)}</b> · ${i.url?`<a href="${i.url}" target="_blank" style="color:inherit">HMS_${esc(i.code)}</a>`:esc(i.code)}</div>
+    <div style="font-size:14px;margin-top:2px">${esc(i.text)}</div></div>`).join("");
+}
+function renderBed(b){
+  if(!b){ $("bedCard").style.display="none"; return; }
+  $("bedCard").style.display = b.enabled ? "" : "none";
+  const ban = b.fault ? "FAULT (servo held open): "+b.fault+" - fix the cause, then Reset fault" : b.alert ? "Heating off: "+b.alert : "";
+  $("bcBanner").style.display = ban ? "" : "none"; $("bcBanner").textContent = ban;
+  $("bcState").textContent = b.fault ? "FAULT" : b.state==="close" ? "🔥 HEATING" : "🧊 OFF";
+  $("bcState").style.color = b.fault ? "var(--danger)" : b.state==="close" ? "var(--warn)" : "";
+  $("bcBed").innerHTML = fmtT(b.bed)+(b.bed_target?`<em>/${Math.round(b.bed_target)}</em>`:"");
+  const us = b.uno_status && b.uno_status.P;
+  $("bcServo").innerHTML = (b.state==="close"?"Closed":"Open")+(us?`<em> ${us}us</em>`:"");
+  $("bcUno").textContent = b.uno ? "OK" : "No reply";
+  $("bcReason").textContent = (b.manual?"Manual test: "+b.manual+" · ":"")+(b.reason||"")+(b.port?" · "+b.port:"");
+}
+async function bedCmd(what, body){
+  try{ const r=await post("/api/bed/"+what, body||{}); if(r.ok===false) toast(r.error||"Failed",true); else toast("Sent"); }
+  catch(e){ if(e.message!=="auth") toast("Can't reach PrintView",true); }
+}
+async function bedLog(){
+  const d=$("bcLog").closest("details");
+  if(d && d.open){ try{ const r=await (await fetch("/api/bed")).json(); $("bcLog").textContent=(r.log||[]).join("\n"); }catch(e){} }
+  setTimeout(bedLog, 2000);
+}
+async function cmd(action, extra){
+  if(busy) return; busy=true;
+  try{
+    const r = await post("/api/cmd",{action,...extra});
+    if(r.ok){ buzz(30); toast({pause:"Pausing...",resume:"Resuming...",stop:"Stopping...",light_on:"Light on",light_off:"Light off"}[action]||"Sent"); }
+    else toast(r.error||"Command failed",true);
+  }catch(e){ if(e.message!=="auth") toast("Can't reach PrintView",true); }
+  finally{ setTimeout(()=>busy=false,800); }
+}
+function fmtMin(m){ if(m==null||m<0) return "--"; const h=Math.floor(m/60), mm=m%60; return h?`${h}h ${String(mm).padStart(2,"0")}m`:`${mm}m`; }
+function fmtT(v){ return v==null ? "--" : Math.round(v)+"°"; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function render(s){
+  S = s; const p=s.printer, c=s.camera, d=s.detector;
+  $("dPrinter").className="dot "+(p.connected?"on":"bad");
+  $("dCam").className="dot "+(c.connected?"on":"bad");
+  const notice=[];
+  if(!p.connected) notice.push("Printer not connected"+(p.error?": "+p.error:"")+". Check LAN Only + Developer Mode, IP and access code.");
+  if(d.error) notice.push("Spaghetti detection off: "+d.error);
+  $("notice").style.display=notice.length?"block":"none"; $("notice").textContent=notice.join(" ");
+
+  const st = p.connected ? (STATES[p.state]||[p.state,"var(--muted)"]) : STATES.UNKNOWN;
+  $("stateTxt").textContent=st[0]; $("stateDot").style.background=st[1];
+
+  const active = ["RUNNING","PAUSE","PREPARE"].includes(p.state);
+  $("job").textContent = p.job ? p.job : (active?"Print":"No active print");
+  $("pct").innerHTML = (p.percent!=null && p.state!=="IDLE" ? p.percent : "--")+"<small>%</small>";
+  $("bar").style.width = (p.percent||0)+"%";
+  $("bar").style.background = p.state==="PAUSE"?"var(--warn)":p.state==="FAILED"?"var(--danger)":"var(--accent)";
+  $("remain").textContent = active ? fmtMin(p.remaining_min) : "--";
+  if(active && p.remaining_min>0){
+    const eta=new Date(Date.now()+p.remaining_min*60000);
+    $("etaClock").textContent="done ~"+eta.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+  } else $("etaClock").textContent="remaining";
+  $("layer").innerHTML = p.layer!=null && p.total_layers ? `${p.layer}<em>/${p.total_layers}</em>` : "--";
+  $("nozzle").innerHTML = fmtT(p.nozzle)+(p.nozzle_target?`<em>/${Math.round(p.nozzle_target)}</em>`:"");
+  $("bed").innerHTML = fmtT(p.bed)+(p.bed_target?`<em>/${Math.round(p.bed_target)}</em>`:"")+(s.bedctl&&s.bedctl.enabled?(s.bedctl.state==="close"?" 🔥":" 🧊"):"");
+
+  renderBed(s.bedctl);
+  renderTl(s.timelapse);
+  renderHms(s.hms);
+
+  const pb=$("pauseBtn");
+  if(p.state==="PAUSE"){ pb.className="act resume"; pb.innerHTML=ICON_PLAY+"Resume"; pb.disabled=!p.connected; pb.dataset.a="resume"; }
+  else { pb.className="act"; pb.innerHTML=ICON_PAUSE+"Pause"; pb.disabled=!(p.connected && p.state==="RUNNING"); pb.dataset.a="pause"; }
+  $("stopBtn").disabled = !(p.connected && active);
+  $("lightBtn").classList.toggle("lit", p.light===true);
+
+  // camera age
+  if(c.connected && c.frame_age_s!=null) $("camAge").textContent = c.frame_age_s<3 ? "LIVE" : Math.round(c.frame_age_s)+"s ago";
+  else $("camAge").textContent = "";
+  if(!c.connected && !camHasFrame) $("camEmpty").textContent = "Camera offline"+(c.error?" - "+c.error:"");
+
+  // detector
+  const custom = d.mode==="custom";
+  const sc = custom ? (d.custom_score||0) : d.score, wa = custom ? d.custom_warn_at : d.warn_at, pa = custom ? d.custom_pause_at : d.pause_at;
+  const max = custom ? 1 : pa*1.3, pct = Math.min(100,(sc/max)*100);
+  $("meterFill").style.width = pct+"%";
+  $("meterFill").style.background = sc>=pa?"var(--danger)":sc>=wa?"var(--warn)":"var(--ok)";
+  $("markWarn").style.left = (wa/max*100)+"%"; $("markPause").style.left = (pa/max*100)+"%";
+  const tr = s.training||{};
+  $("modelLine").textContent = custom ? "Your model: "+(tr.summary||"active") : tr.trained ? "Obico stock (your model is off)" : "Obico stock · label prints to train yours";
+  $("reviewBadge").textContent = tr.review ? tr.review+" to review" : "";
+  let ws;
+  if(!d.enabled) ws="off";
+  else if(p.state!=="RUNNING") ws = p.state==="PAUSE"?"paused":"idle";
+  else if(d.acted) ws="FAILURE FLAGGED";
+  else if(d.warmup_s>0) ws=`warming up ${Math.floor(d.warmup_s/60)}:${String(d.warmup_s%60).padStart(2,"0")}`;
+  else ws = "watching"+(d.infer_ms?` · ${d.infer_ms}ms`:"");
+  $("watchState").textContent = ws;
+  $("autoPause").checked = !!s.settings.auto_pause;
+  document.querySelectorAll("#sens button").forEach(b=>b.classList.toggle("on", b.dataset.v===s.settings.sensitivity));
+  if(d.has_detection_image){
+    $("detBox").style.display="block";
+    if(render._detT !== d.frames_this_print+"-"+d.acted+"-"+d.warned){ render._detT=d.frames_this_print+"-"+d.acted+"-"+d.warned; $("detImg").src="/detection.jpg?t="+Date.now(); }
+  }
+  $("notifyState").textContent = s.notify ? "push on" : "push off";
+
+  const evs = s.events||[];
+  $("events").innerHTML = evs.length ? evs.map(e=>{
+    const t=new Date(e.t*1000), today=new Date().toDateString()===t.toDateString();
+    const ts = today ? t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : t.toLocaleDateString([],{month:"short",day:"numeric"});
+    return `<div class="ev ${esc(e.kind)}"><time>${ts}</time><span>${esc(e.text)}</span></div>`;
+  }).join("") : '<div class="muted">Nothing yet.</div>';
+}
+
+// live status via server-sent events, polling fallback
+let es;
+function connect(){
+  try{ es && es.close(); }catch(e){}
+  es = new EventSource("/api/stream");
+  es.onmessage = ev => { try{ render(JSON.parse(ev.data)); }catch(e){} };
+  es.onerror = () => { es.close(); setTimeout(()=>{ if(!document.hidden) connect(); }, 3000);
+    fetch("/api/status").then(r=>{ if(r.status===401) location.href="/login"; }).catch(()=>{}); };
+}
+
+// camera: refresh the snapshot (the P1S camera is ~0.5 fps in LAN mode)
+let camHasFrame=false, camTimer=null;
+function camLoop(){
+  clearTimeout(camTimer);
+  if(document.hidden) return;
+  const img = new Image();
+  img.onload = () => { $("camImg").src = img.src; camHasFrame=true; $("camEmpty").style.display="none";
+    if($("fsView").style.display==="flex") $("fsImg").src=img.src; camTimer=setTimeout(camLoop, 1000); };
+  img.onerror = () => { camTimer=setTimeout(camLoop, 2500); };
+  img.src = "/snapshot.jpg?t="+Date.now();
+}
+
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden){ connect(); camLoop(); } });
+
+$("pauseBtn").onclick = () => cmd($("pauseBtn").dataset.a);
+$("lightBtn").onclick = () => cmd(S && S.printer.light ? "light_off" : "light_on");
+$("bcOpen").onclick = () => bedCmd("test", {mode:"open", seconds:120});
+$("bcClose").onclick = () => bedCmd("test", {mode:"close", seconds:60});
+$("bcAuto").onclick = () => bedCmd("test", {mode:"auto"});
+$("bcReset").onclick = () => bedCmd("reset");
+bedLog();
+$("fsBtn").onclick = () => { $("fsImg").src=$("camImg").src; $("fsView").style.display="flex"; };
+$("fsView").onclick = () => $("fsView").style.display="none";
+$("autoPause").onchange = e => post("/api/settings",{auto_pause:e.target.checked}).then(()=>toast(e.target.checked?"Auto-pause on":"Auto-pause off"));
+document.querySelectorAll("#sens button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#sens button").forEach(x=>x.classList.toggle("on",x===b));
+  post("/api/settings",{sensitivity:b.dataset.v});
+});
+
+// stop sheet with hold-to-confirm
+function sheet(open){ $("sheet").classList.toggle("open",open); $("scrim").style.display=open?"block":"none"; }
+$("stopBtn").onclick = () => sheet(true);
+$("cancelBtn").onclick = $("scrim").onclick = () => sheet(false);
+let holdT=null, holdStart=0;
+function holdBegin(e){ e.preventDefault(); holdStart=Date.now(); buzz(15);
+  holdT=setInterval(()=>{ const f=Math.min(1,(Date.now()-holdStart)/1200); $("holdFill").style.width=(f*100)+"%";
+    if(f>=1){ holdEnd(); sheet(false); buzz([40,60,40]); cmd("stop",{confirm:"STOP"}); } },30); }
+function holdEnd(){ clearInterval(holdT); holdT=null; $("holdFill").style.width="0"; }
+const hb=$("holdBtn");
+hb.addEventListener("pointerdown",holdBegin); ["pointerup","pointerleave","pointercancel"].forEach(ev=>hb.addEventListener(ev,holdEnd));
+hb.addEventListener("contextmenu",e=>e.preventDefault());
+
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
+connect(); camLoop();
+</script>
+<script>window.VFX_IMG="#camImg";window.VFX_BOX="#cam";</script>
+<script>
+/* Video settings: per-viewer look of the camera feed (saved in this browser only). */
+(function(){
+  const IMG = document.querySelector(window.VFX_IMG), BOX = document.querySelector(window.VFX_BOX);
+  if (!IMG || !BOX) return;
+  const KEY = "pw_vfx", D = {bright:100, contrast:100, sat:100, hue:0, gray:false, invert:false, sepia:false, flipH:false, flipV:false, zoom:100, night:false};
+  let v = Object.assign({}, D);
+  try { Object.assign(v, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} };
+  function apply(){
+    const f = [`brightness(${v.bright}%)`, `contrast(${v.contrast}%)`, `saturate(${v.sat}%)`, `hue-rotate(${v.hue}deg)`];
+    if (v.gray) f.push("grayscale(1)");
+    if (v.sepia) f.push("sepia(1)");
+    if (v.invert) f.push("invert(1)");
+    if (v.night) f.push("grayscale(1) sepia(1) hue-rotate(70deg) saturate(3) brightness(1.2)");
+    IMG.style.filter = f.join(" ");
+    IMG.style.transform = `scale(${(v.flipH?-1:1)*v.zoom/100}, ${(v.flipV?-1:1)*v.zoom/100})`;
+    IMG.style.transformOrigin = "center";
+    BOX.style.overflow = "hidden";
+  }
+  const btn = document.createElement("button");
+  btn.type = "button"; btn.title = "Video settings"; btn.textContent = "⚙";
+  btn.style.cssText = "position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;width:38px;height:38px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:20px;cursor:pointer";
+  if (getComputedStyle(BOX).position === "static") BOX.style.position = "relative";
+  BOX.appendChild(btn);
+  const p = document.createElement("div");
+  p.style.cssText = "display:none;position:fixed;right:16px;top:70px;z-index:99;width:min(320px,calc(100vw - 32px));max-height:80vh;overflow:auto;background:#16181d;color:#eee;border:1px solid #333;border-radius:14px;padding:14px 16px;font:14px system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)";
+  const sl = (k,l,min,max,u) => `<label style="display:block;margin:8px 0">${l} <span id="vfx_${k}_v" style="float:right;opacity:.7"></span><input type="range" min="${min}" max="${max}" data-k="${k}" data-u="${u}" style="width:100%"></label>`;
+  const ck = (k,l) => `<label style="display:inline-flex;gap:6px;align-items:center;margin:6px 12px 6px 0"><input type="checkbox" data-k="${k}">${l}</label>`;
+  p.innerHTML = `<div style="display:flex;align-items:center;margin-bottom:6px"><b style="flex:1">Video settings</b><button type="button" id="vfx_x" style="background:none;border:0;color:#aaa;font-size:20px;cursor:pointer">×</button></div>
+    ${sl("bright","Brightness",20,250,"%")}${sl("contrast","Contrast",20,250,"%")}${sl("sat","Saturation",0,300,"%")}${sl("hue","Hue shift",0,360,"°")}${sl("zoom","Zoom",100,400,"%")}
+    <div>${ck("gray","Greyscale")}${ck("invert","Invert colors")}${ck("sepia","Sepia")}${ck("night","Night vision")}${ck("flipH","Flip sideways")}${ck("flipV","Flip upside down")}</div>
+    <button type="button" id="vfx_r" style="width:100%;margin-top:10px;padding:9px;border-radius:10px;border:0;background:#2a2d35;color:#eee;cursor:pointer">Reset</button>
+    <div style="font-size:12px;opacity:.6;margin-top:8px">Only changes what you see on this device.</div>`;
+  document.body.appendChild(p);
+  function sync(){
+    p.querySelectorAll("[data-k]").forEach(el => {
+      const k = el.dataset.k;
+      if (el.type === "checkbox") el.checked = !!v[k];
+      else { el.value = v[k]; p.querySelector(`#vfx_${k}_v`).textContent = v[k] + el.dataset.u; }
+    });
+    apply();
+  }
+  p.addEventListener("input", e => {
+    const el = e.target, k = el.dataset && el.dataset.k; if (!k) return;
+    v[k] = el.type === "checkbox" ? el.checked : +el.value; save(); sync();
+  });
+  btn.onclick = e => { e.stopPropagation(); p.style.display = p.style.display === "none" ? "block" : "none"; };
+  p.querySelector("#vfx_x").onclick = () => p.style.display = "none";
+  p.querySelector("#vfx_r").onclick = () => { v = Object.assign({}, D); save(); sync(); };
+  sync();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+aiohttp>=3.9,<4
+paho-mqtt>=2.0,<3
+onnxruntime>=1.16
+numpy>=1.24
+pillow>=10
+onnx>=1.14
+cryptography>=41
+pyserial>=3.5

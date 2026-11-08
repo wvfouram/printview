@@ -1,0 +1,14 @@
+services:
+  camview:
+    image: python:3.12-alpine
+    container_name: camview
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      ACCESS_CODE: "775599"
+      MASTER_CODE: "667741"
+    volumes:
+      - ./camview.py:/app/camview.py:ro
+      - ./page.html:/app/page.html:ro
+      - ./data:/data
+    command: python -u /app/camview.py

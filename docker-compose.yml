@@ -1,0 +1,18 @@
+services:
+  printwatch:
+    build: .
+    container_name: printwatch
+    restart: unless-stopped
+    network_mode: host          # app on http://<pi-ip>:8080, talks straight to the printer
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+      - /dev:/dev                 # bed servo Uno: USB serial shows up even if plugged in later
+    device_cgroup_rules:
+      - "c 166:* rmw"             # ttyACM* (Arduino Uno)
+      - "c 188:* rmw"             # ttyUSB* (clone boards)
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
