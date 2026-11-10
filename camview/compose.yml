@@ -5,8 +5,8 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      ACCESS_CODE: "${ACCESS_CODE}"
-      MASTER_CODE: "${MASTER_CODE}"
+      ACCESS_CODE: "${ACCESS_CODE:?set ACCESS_CODE in camview/.env}"
+      MASTER_CODE: "${MASTER_CODE:?set MASTER_CODE in camview/.env}"
     volumes:
       - ./camview.py:/app/camview.py:ro
       - ./page.html:/app/page.html:ro
