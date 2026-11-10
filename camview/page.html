@@ -650,7 +650,20 @@ VIEWS.ams = {
     el.innerHTML = `<div id="amsUnits"><div class="card mu">Loading...</div></div>
       <div class="card ro-hide"><div class="h">Actions</div>
         <div class="row w"><button class="btn sm" id="aUnload">Unload</button><button class="btn sm" id="aExt">Load external spool</button><button class="btn sm" id="aRetry">Retry after AMS error</button></div>
-        <div class="mu sm" style="margin-top:12px">Drying can only be started from the printer's screen (the P1 series doesn't accept drying commands over the network). Its temperature, humidity and time left show up here while it runs.</div></div>`;
+        </div>
+      <div class="card ro-hide"><div class="h">Drying (AMS HT / AMS 2 Pro, printer idle)</div>
+        <div class="row w" style="gap:10px;align-items:flex-end">
+          <label class="mu sm">AMS<br><input id="dUnit" type="number" value="129" style="width:80px"></label>
+          <label class="mu sm">Filament<br><select id="dFil">${["PLA","PETG","ABS","ASA","TPU","PA","PC","PVA"].map(x => `<option>${x}</option>`).join("")}</select></label>
+          <label class="mu sm">Temp (°C)<br><input id="dTemp" type="number" min="30" max="70" value="55" style="width:80px"></label>
+          <label class="mu sm">Hours<br><input id="dHrs" type="number" min="1" max="24" value="4" style="width:80px"></label>
+          <label class="ck"><input type="checkbox" id="dRot" checked>Rotate spools</label>
+        </div>
+        <div class="row w" style="margin-top:10px"><button class="btn sm" id="dStart">Start drying</button><button class="btn sm bad" id="dStop">Stop drying</button></div>
+        <div class="mu sm" style="margin-top:8px">Rotating needs the filament pulled out of the feeders. Time left shows on the AMS card above.</div></div>`;
+    const dry = on => cmd("ams_dry", {unit: +$("#dUnit").value, on, filament: $("#dFil").value, temp: +$("#dTemp").value, hours: +$("#dHrs").value, rotate: $("#dRot").checked}, on ? "Drying started" : "Drying stopped");
+    $("#dStart").onclick = () => dry(true);
+    $("#dStop").onclick = () => dry(false);
     $("#aUnload").onclick = () => confirmBox("Unload filament?", "The printer will cut and pull back the current filament.", "Unload", () => cmd("ams_unload", null, "Unloading..."));
     $("#aExt").onclick = () => cmd("ams_load", {tray: 254}, "Loading external spool...");
     $("#aRetry").onclick = () => cmd("ams_resume", null, "Retrying AMS...");

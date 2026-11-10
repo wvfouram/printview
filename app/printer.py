@@ -424,6 +424,19 @@ class BambuPrinter:
         return self._publish({"print": {"sequence_id": self._next_seq(), "command": "ams_get_rfid",
                                         "ams_id": slot // 4, "slot_id": slot % 4}})
 
+    def ams_dry(self, unit: int, on: bool, filament: str = "PLA", temp: int = 55, hours: float = 4,
+                rotate: bool = True) -> bool:
+        """Start/stop the dryer of an AMS HT / AMS 2 Pro. unit = the AMS number shown in the app (1, 129...)."""
+        if self.busy and on:
+            raise PermissionError("the printer only allows drying while it is idle")
+        temp = max(30, min(70, int(temp)))
+        hours = max(1, min(24, int(round(float(hours)))))
+        return self._publish({"print": {
+            "sequence_id": self._next_seq(), "command": "ams_filament_drying", "ams_id": int(unit) - 1,
+            "mode": 1 if on else 0, "filament": str(filament).upper()[:16] if on else "",
+            "temp": temp, "cooling_temp": 45, "duration": hours, "humidity": 0,
+            "rotate_tray": bool(rotate), "close_power_conflict": False}})
+
     def ams_user_setting(self, startup_read: bool, tray_read: bool, remain_calc: bool) -> bool:
         return self._publish({"print": {"sequence_id": self._next_seq(), "command": "ams_user_setting",
                                         "ams_id": -1, "startup_read_option": bool(startup_read),

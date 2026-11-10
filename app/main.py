@@ -348,13 +348,15 @@ COMMANDS = {
     "ams_setting": lambda p, b: p.ams_setting(b.get("slot"), str(b.get("type", "PLA")), str(b.get("color", "")),
                                               b.get("min", 190), b.get("max", 230), str(b.get("idx", ""))),
     "ams_rfid": lambda p, b: p.ams_read_rfid(b.get("slot")),
+    "ams_dry": lambda p, b: p.ams_dry(b.get("unit", 129), bool(b.get("on", True)), str(b.get("filament", "PLA")),
+                                      b.get("temp", 55), b.get("hours", 4), bool(b.get("rotate", True))),
     "ams_options": lambda p, b: p.ams_user_setting(b.get("startup_read"), b.get("tray_read"), b.get("remain_calc")),
     "option": lambda p, b: p.print_option(str(b.get("name")), b.get("value")),
     "calibrate": lambda p, b: p.calibrate(b.get("bed"), b.get("vibration"), b.get("motor")),
 }
 LOGGED = {"pause": "Pause", "resume": "Resume", "stop": "Stop", "speed": "Speed change", "home": "Home",
           "ams_load": "AMS load", "ams_unload": "AMS unload", "gcode": "G-code", "skip": "Skip objects",
-          "calibrate": "Calibration", "ams_setting": "AMS slot setting"}
+          "calibrate": "Calibration", "ams_setting": "AMS slot setting", "ams_dry": "AMS drying"}
 
 
 async def api_cmd(request):
