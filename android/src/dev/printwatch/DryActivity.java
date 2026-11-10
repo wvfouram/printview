@@ -33,7 +33,7 @@ public class DryActivity extends Base {
         fil = new Spinner(c);
         fil.setAdapter(new ArrayAdapter<String>(c, android.R.layout.simple_spinner_dropdown_item, FIL));
         card.addView(fil);
-        temp = field(card, "Temperature (30-70 °C)", "55");
+        temp = field(card, "Temperature (30-85 °C)", "55");
         hours = field(card, "Hours (1-24)", "4");
         rotate = new CheckBox(c);
         rotate.setText("Rotate spools (pull filament out of the feeders first)");

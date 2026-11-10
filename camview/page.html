@@ -655,7 +655,7 @@ VIEWS.ams = {
         <div class="row w" style="gap:10px;align-items:flex-end">
           <label class="mu sm">AMS<br><input id="dUnit" type="number" value="129" style="width:80px"></label>
           <label class="mu sm">Filament<br><select id="dFil">${["PLA","PETG","ABS","ASA","TPU","PA","PC","PVA"].map(x => `<option>${x}</option>`).join("")}</select></label>
-          <label class="mu sm">Temp (°C)<br><input id="dTemp" type="number" min="30" max="70" value="55" style="width:80px"></label>
+          <label class="mu sm">Temp (°C)<br><input id="dTemp" type="number" min="30" max="85" value="55" style="width:80px"></label>
           <label class="mu sm">Hours<br><input id="dHrs" type="number" min="1" max="24" value="4" style="width:80px"></label>
           <label class="ck"><input type="checkbox" id="dRot" checked>Rotate spools</label>
         </div>
