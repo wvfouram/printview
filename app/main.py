@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import secrets
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -123,6 +124,8 @@ def build_app():
     app.router.add_post("/api/upload", api_upload)
     app.router.add_get("/api/files/download", api_file_download)
     app.router.add_post("/api/files/delete", api_file_delete)
+    app.router.add_get("/api/trash", api_trash)
+    app.router.add_post("/api/trash/restore", api_trash_restore)
     app.router.add_get("/api/files/info", api_file_info)
     app.router.add_get("/api/files/plate.png", api_file_plate)
     app.router.add_post("/api/print", api_print_start)
@@ -662,12 +665,50 @@ async def api_file_delete(request):
     if request.app["printer"].status().get("busy") and path.endswith(os.path.basename(request.app["printer"].status().get("file") or "\0")):
         return web.json_response({"ok": False, "error": "That file is printing right now"}, status=409)
     try:
-        if not await _known_file(request.app, path):
+        f = await _known_file(request.app, path)
+        if not f:
             return web.json_response({"ok": False, "error": "File not found on the SD card"}, status=404)
+        # keep a copy on the Pi first (Recently deleted), so a delete can always be undone
+        local = await _run(request.app["sd"].fetch, path, f.get("size"))
+        tdir = os.path.join(env("DATA_DIR", "/data"), "trash")
+        os.makedirs(tdir, exist_ok=True)
+        await _run(shutil.copyfile, local, os.path.join(tdir, time.strftime("%Y%m%d-%H%M%S__") + f["name"]))
         await _run(request.app["sd"].delete, path)
     except Exception as e:  # noqa: BLE001
         return _sd_error(e)
     request.app["events"].add("cmd", f"Deleted {os.path.basename(path)} from the SD card")
+    return web.json_response({"ok": True})
+
+
+def _trash_dir():
+    d = os.path.join(env("DATA_DIR", "/data"), "trash")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+async def api_trash(request):
+    d = _trash_dir()
+    items = []
+    for n in sorted(os.listdir(d), reverse=True):
+        p = os.path.join(d, n)
+        if "__" in n and os.path.isfile(p):
+            items.append({"id": n, "name": n.split("__", 1)[1], "deleted": n.split("__", 1)[0],
+                          "size": os.path.getsize(p)})
+    return web.json_response({"items": items})
+
+
+async def api_trash_restore(request):
+    b = await request.json()
+    n = os.path.basename(str(b.get("id") or ""))
+    p = os.path.join(_trash_dir(), n)
+    if "__" not in n or not os.path.isfile(p):
+        return web.json_response({"ok": False, "error": "Not in Recently deleted"}, status=404)
+    try:
+        await _run(request.app["sd"].upload, p, n.split("__", 1)[1])
+    except Exception as e:  # noqa: BLE001
+        return _sd_error(e)
+    os.remove(p)
+    request.app["events"].add("cmd", f"Restored {n.split('__', 1)[1]} to the SD card")
     return web.json_response({"ok": True})
 
 

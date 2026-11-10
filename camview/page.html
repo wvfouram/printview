@@ -706,7 +706,8 @@ VIEWS.print = {
   build(el) {
     el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm" id="pRef">Refresh</button></div>
       <div class="mu sm" id="pUpMsg" style="margin-top:6px"></div>
-      <div class="list" id="pList" style="margin-top:10px"><div class="mu">Loading...</div></div></div><div id="pDetail"></div>`;
+      <div class="list" id="pList" style="margin-top:10px"><div class="mu">Loading...</div></div>
+      <details style="margin-top:12px"><summary class="mu sm" style="cursor:pointer">Recently deleted (kept on the Pi)</summary><div class="list" id="pTrash" style="margin-top:8px"></div></details></div><div id="pDetail"></div>`;
     $("#pRef").onclick = () => this.load(true);
     $("#pUp").onclick = () => pwUpload(BASE + "/api/upload", {"X-PW": "1"}, () => this.load(true), $("#pUpMsg"));
     this.load(false);
@@ -730,6 +731,13 @@ VIEWS.print = {
         }, true);
       });
     } catch (e) { $("#pList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+    try {
+      const t = (await api("/api/trash")).items || [];
+      $("#pTrash").innerHTML = t.length ? t.map((x, i) => `<div><div class="grow"><div style="font-weight:600">${esc(x.name)}</div><div class="fa sm">deleted ${esc(x.deleted.replace(/(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d).*/, "$1-$2-$3 $4:$5"))} · ${(x.size / 1e6).toFixed(1)} MB</div></div><button class="btn sm" data-res="${i}">Restore</button></div>`).join("") : '<div class="mu sm">Nothing deleted yet.</div>';
+      $("#pTrash").querySelectorAll("[data-res]").forEach(b => b.onclick = async () => {
+        try { await api("/api/trash/restore", {id: t[+b.dataset.res].id}); toast("Restored to the SD card"); this.load(true); } catch (err) { toast(err.message); }
+      });
+    } catch (e) {}
   },
   async open(f) {
     const box = $("#pDetail");

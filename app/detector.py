@@ -289,7 +289,9 @@ class DetectionLoop:
             self.pred.reset_for_new_print()
             self.warned = self.acted = self.flagged = False
             self.custom_s = self.custom_prev = self.custom_p = None
-            if self.dataset:
+            f = (self.printer.status().get("file") or "") if self.printer else ""
+            cali = any(k in (job + " " + f).lower() for k in ("auto_cali", "/usr/etc/print/", "calibration"))
+            if self.dataset and not cali:      # calibration runs never go into the training data
                 self.dataset.start_print(job)
         elif new == "RUNNING" and old == "PAUSE":
             # resumed: give it a minute and clear short-term memory so it doesn't re-pause on stale readings
