@@ -192,6 +192,13 @@ button.act:disabled{opacity:.3;pointer-events:none}
       <pre id="bcLog" style="font-size:11px;max-height:220px;overflow:auto;white-space:pre-wrap;margin:6px 0 0"></pre></details>
   </div>
 
+  <div class="card">
+    <div class="secHead"><h2>Upload a print</h2></div>
+    <div style="font-size:13px;opacity:.7;margin:6px 0">Send a sliced .gcode.3mf (Orca: File, Export, Export plate sliced file) to the printer's SD card.</div>
+    <button class="act" id="upBtn" style="width:100%">Choose file and upload</button>
+    <div id="upMsg" style="font-size:13px;margin-top:8px"></div>
+  </div>
+
   <div class="card" id="tlCard">
     <div class="secHead"><h2>Timelapse</h2><span class="watchState" id="tlState">-</span></div>
     <div id="tlMsg" style="font-size:13px;opacity:.7;margin:6px 0"></div>
@@ -279,6 +286,30 @@ function renderHms(h){
     <div style="font-size:12px;opacity:.7"><b style="color:${i.level==="Fatal"||i.level==="Serious"||i.level==="Print error"?"var(--danger)":"var(--accent,#f5a623)"}">${esc(i.level)}</b> · ${i.url?`<a href="${i.url}" target="_blank" style="color:inherit">HMS_${esc(i.code)}</a>`:esc(i.code)}</div>
     <div style="font-size:14px;margin-top:2px">${esc(i.text)}</div></div>`).join("");
 }
+
+function pwUpload(url, extraHeaders, onDone, statusEl) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".3mf,.gcode";
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    if (!/\.(3mf|gcode)$/i.test(f.name)) { statusEl.textContent = "Pick a .gcode.3mf, .3mf or .gcode file"; return; }
+    const x = new XMLHttpRequest();
+    x.open("POST", url + "?name=" + encodeURIComponent(f.name));
+    x.withCredentials = true;
+    x.setRequestHeader("Content-Type", "application/octet-stream");
+    for (const k in extraHeaders) x.setRequestHeader(k, extraHeaders[k]);
+    x.upload.onprogress = e => { if (e.lengthComputable) statusEl.textContent = "Uploading " + f.name + " - " + Math.round(e.loaded / e.total * 100) + "%"; };
+    x.onload = () => {
+      let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status === 200 && j.ok) { statusEl.textContent = "Uploaded " + j.name + " - it's at the top of the SD list"; onDone && onDone(j); }
+      else statusEl.textContent = "Upload failed: " + (j.error || ("HTTP " + x.status));
+    };
+    x.onerror = () => statusEl.textContent = "Upload failed: connection lost";
+    statusEl.textContent = "Uploading " + f.name + " - 0%";
+    x.send(f);
+  };
+  inp.click();
+}
 function renderBed(b){
   if(!b){ $("bedCard").style.display="none"; return; }
   $("bedCard").style.display = b.enabled ? "" : "none";
@@ -331,8 +362,12 @@ function render(s){
   $("pct").innerHTML = (p.percent!=null && p.state!=="IDLE" ? p.percent : "--")+"<small>%</small>";
   $("bar").style.width = (p.percent||0)+"%";
   $("bar").style.background = p.state==="PAUSE"?"var(--warn)":p.state==="FAILED"?"var(--danger)":"var(--accent)";
-  $("remain").textContent = active ? fmtMin(p.remaining_min) : "--";
-  if(active && p.remaining_min>0){
+  const pr = s.predict && s.predict.done_at ? s.predict : null;
+  $("remain").textContent = active ? fmtMin(pr ? Math.round(pr.remaining_min) : p.remaining_min) : "--";
+  if(active && pr){
+    $("etaClock").textContent="done "+new Date(pr.done_at*1000).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})+" \u00b1"+pr.pm_min+"m"+(pr.learned_from?"":" (learning)");
+    $("etaClock").title="Bambu says "+fmtMin(p.remaining_min)+" left";
+  } else if(active && p.remaining_min>0){
     const eta=new Date(Date.now()+p.remaining_min*60000);
     $("etaClock").textContent="done ~"+eta.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
   } else $("etaClock").textContent="remaining";
@@ -496,6 +531,7 @@ connect(); camLoop();
   p.querySelector("#vfx_r").onclick = () => { v = Object.assign({}, D); save(); sync(); };
   sync();
 })();
+$("upBtn").onclick=()=>pwUpload("/api/upload",{},null,$("upMsg"));
 </script>
 </body>
 </html>

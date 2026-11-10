@@ -15,6 +15,7 @@ from aiohttp import web
 
 from .timelapse import Timelapse
 from .hms import HMS
+from .predict import Predictor
 from .bedctl import BedControl
 from .streams import STREAMS
 from .camera import BambuCamera
@@ -91,6 +92,7 @@ def build_app():
     if app["remote_port"]:
         app["cert"] = rm.ensure_cert(data_dir)
     app["hms"] = HMS(data_dir)
+    app["predict"] = Predictor(printer, data_dir)
     app["timelapse"] = Timelapse(camera, printer, data_dir, events)
     app["bedctl"] = BedControl(printer, env("BED_PORT", "/dev/ttyACM0"), data_dir, env("BED_CONTROL", "on") != "off")
     app["camera"], app["printer"], app["settings"] = camera, printer, settings
@@ -118,6 +120,7 @@ def build_app():
     app.router.add_post("/api/remote/forget", api_remote_forget)
     app.router.add_get("/api/ping", lambda r: web.json_response({"ok": True, "remote": bool(r.get("remote"))}))
     app.router.add_get("/api/files", api_files)
+    app.router.add_post("/api/upload", api_upload)
     app.router.add_get("/api/files/info", api_file_info)
     app.router.add_get("/api/files/plate.png", api_file_plate)
     app.router.add_post("/api/print", api_print_start)
@@ -279,6 +282,7 @@ def full_status(app):
         "bedctl": app["bedctl"].status(),
         "timelapse": app["timelapse"].status(),
         "hms": app["hms"].status(app["printer"]),
+        "predict": app["predict"].status(),
     }
 
 
@@ -592,6 +596,40 @@ def _run(fn, *a):
 def _sd_error(e):
     log.warning("sd card: %s", e)
     return web.json_response({"ok": False, "error": f"SD card: {e}"}, status=502)
+
+
+UPLOAD_MAX = 500 * 1024 * 1024
+
+
+async def api_upload(request):
+    """Raw file body; ?name=part.gcode.3mf. Saved to the printer's SD card, ready in Print from SD."""
+    name = os.path.basename((request.query.get("name") or "").replace("\\", "/")).strip()
+    name = re.sub(r'[^\w .()+\-]', "_", name)[:120]
+    if not re.search(r"\.(3mf|gcode)$", name, re.I):
+        return web.json_response({"ok": False, "error": "Only .gcode.3mf, .3mf or .gcode files"}, status=400)
+    tmpdir = os.path.join(env("DATA_DIR", "/data"), "uploads")
+    os.makedirs(tmpdir, exist_ok=True)
+    tmp = os.path.join(tmpdir, "incoming.part")
+    size = 0
+    try:
+        with open(tmp, "wb") as out:
+            async for chunk in request.content.iter_chunked(65536):
+                size += len(chunk)
+                if size > UPLOAD_MAX:
+                    return web.json_response({"ok": False, "error": "File too big (500 MB max)"}, status=413)
+                out.write(chunk)
+        if size < 100:
+            return web.json_response({"ok": False, "error": "Empty file"}, status=400)
+        await _run(request.app["sd"].upload, tmp, name)
+    except Exception as e:  # noqa: BLE001
+        return web.json_response({"ok": False, "error": f"Upload failed: {e}"}, status=502)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    request.app["events"].add("cmd", f"Uploaded {name} ({size // 1024} KB)")
+    return web.json_response({"ok": True, "name": name, "path": "/" + name, "size": size})
 
 
 async def api_files(request):

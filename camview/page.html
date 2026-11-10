@@ -153,6 +153,30 @@ let unlocked = false, role = null, frozen = false, readOnly = true, status = nul
 let toastT;
 function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
 
+
+function pwUpload(url, extraHeaders, onDone, statusEl) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".3mf,.gcode";
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    if (!/\.(3mf|gcode)$/i.test(f.name)) { statusEl.textContent = "Pick a .gcode.3mf, .3mf or .gcode file"; return; }
+    const x = new XMLHttpRequest();
+    x.open("POST", url + "?name=" + encodeURIComponent(f.name));
+    x.withCredentials = true;
+    x.setRequestHeader("Content-Type", "application/octet-stream");
+    for (const k in extraHeaders) x.setRequestHeader(k, extraHeaders[k]);
+    x.upload.onprogress = e => { if (e.lengthComputable) statusEl.textContent = "Uploading " + f.name + " - " + Math.round(e.loaded / e.total * 100) + "%"; };
+    x.onload = () => {
+      let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status === 200 && j.ok) { statusEl.textContent = "Uploaded " + j.name + " - it's at the top of the SD list"; onDone && onDone(j); }
+      else statusEl.textContent = "Upload failed: " + (j.error || ("HTTP " + x.status));
+    };
+    x.onerror = () => statusEl.textContent = "Upload failed: connection lost";
+    statusEl.textContent = "Uploading " + f.name + " - 0%";
+    x.send(f);
+  };
+  inp.click();
+}
 async function api(path, body) {
   const o = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json", "X-PW": "1"}, body: JSON.stringify(body)};
   let r;
@@ -375,8 +399,10 @@ VIEWS.watch = {
     $("#wPct").textContent = has ? p.percent + "%" : "--%";
     $("#wBar").style.width = (has ? p.percent : 0) + "%";
     $("#wBar").style.background = p.state === "FAILED" ? "var(--bad)" : p.state === "FINISH" ? "var(--ok)" : "var(--ac)";
-    $("#wRem").textContent = act ? mins(p.remaining_min) : "--";
-    $("#wEta").textContent = act && p.remaining_min > 0 ? "Done at " + new Date(Date.now() + p.remaining_min * 60000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : "remaining";
+    const pr = s.predict && s.predict.done_at ? s.predict : null;
+    $("#wRem").textContent = act ? mins(pr ? Math.round(pr.remaining_min) : p.remaining_min) : "--";
+    $("#wEta").textContent = act && pr ? "Done at " + new Date(pr.done_at * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) + " \u00b1" + pr.pm_min + "m"
+      : act && p.remaining_min > 0 ? "Done at " + new Date(Date.now() + p.remaining_min * 60000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : "remaining";
     $("#wLayer").textContent = p.layer != null && p.total_layers ? p.layer + " / " + p.total_layers : "--";
     $("#wNoz").textContent = deg(p.nozzle, p.nozzle_target);
     $("#wBed").textContent = deg(p.bed, p.bed_target) + (window._bc && window._bc.enabled ? (window._bc.state === "close" ? " 🔥" : " 🧊") : "");
@@ -665,9 +691,11 @@ VIEWS.ams = {
 // ---------- Print from SD
 VIEWS.print = {
   build(el) {
-    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pRef">Refresh</button></div>
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm" id="pRef">Refresh</button></div>
+      <div class="mu sm" id="pUpMsg" style="margin-top:6px"></div>
       <div class="list" id="pList" style="margin-top:10px"><div class="mu">Loading...</div></div></div><div id="pDetail"></div>`;
     $("#pRef").onclick = () => this.load(true);
+    $("#pUp").onclick = () => pwUpload(BASE + "/api/upload", {"X-PW": "1"}, () => this.load(true), $("#pUpMsg"));
     this.load(false);
   },
   async load(refresh) {

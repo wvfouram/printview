@@ -812,8 +812,15 @@ public class MainActivity extends Activity {
         progress.setProgressTintList(android.content.res.ColorStateList.valueOf(
                 state.equals("FAILED") ? Ui.DANGER : state.equals("FINISH") ? Ui.OK : Ui.ACCENT));
         double rem = p.isNull("remaining_min") ? -1 : p.optDouble("remaining_min", -1);
+        JSONObject pr = s.optJSONObject("predict");
+        boolean smart = pr != null && pr.has("done_at");
+        if (smart) rem = pr.optDouble("remaining_min", rem);
         remain.setText(active ? Ui.mins(rem) + (theater ? " left" : "") : "--");
-        if (active && rem > 0) {
+        if (active && smart) {
+            Date done = new Date(pr.optLong("done_at") * 1000L);
+            eta.setText((theater ? "done " : "Done at ") + DateFormat.getTimeInstance(DateFormat.SHORT).format(done)
+                    + " \u00b1" + pr.optInt("pm_min") + "m");
+        } else if (active && rem > 0) {
             Date done = new Date(System.currentTimeMillis() + (long) (rem * 60000));
             eta.setText((theater ? "done " : "Done at ") + DateFormat.getTimeInstance(DateFormat.SHORT).format(done));
         } else eta.setText(theater ? "" : "remaining");

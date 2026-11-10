@@ -183,6 +183,9 @@ class SDCard:
             except OSError:
                 pass
             out.sort(key=lambda e: (seen.get(e["path"], 0), _when(e.get("date", ""))), reverse=True)
+            for e in out:
+                if seen.get(e["path"]):
+                    e["date"] = time.strftime("%b %d %H:%M", time.localtime(seen[e["path"]]))
             return out
         return self._cached("models", 60, fn)
 
@@ -237,6 +240,12 @@ class SDCard:
     def stream(self, path, on_chunk):
         """Stream a (large) file chunk by chunk, e.g. a timelapse to the phone."""
         self._session(lambda f: f.retrbinary(f"RETR {path}", on_chunk, blocksize=65536), wait=60)
+
+    def upload(self, local, name):
+        """Copy a local file onto the root of the printer's SD card."""
+        with open(local, "rb") as fp:
+            self._session(lambda f: f.storbinary(f"STOR /{name}", fp, blocksize=65536), wait=120)
+        self.invalidate()
 
     def _prune(self, keep_bytes=500_000_000):
         files = sorted((os.path.join(self.cache_dir, n) for n in os.listdir(self.cache_dir)),

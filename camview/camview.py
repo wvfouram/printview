@@ -564,6 +564,8 @@ class H(BaseHTTPRequestHandler):
             return self.admin(method, sub, s)
         if s["role"] != "master" and _state["frozen"]:
             return self.json(423, {"ok": False, "error": "Controls are frozen by the owner"})
+        if method == "POST" and sub == "/api/upload":
+            return self.upload_proxy(query)
         if sub.startswith("/api/") and not sub.startswith(BLOCKED):
             return self.proxy(method, sub + ("?" + query if query else ""))
         if method == "GET" and sub == "/detection.jpg":
@@ -677,6 +679,36 @@ class H(BaseHTTPRequestHandler):
                 _save_sessions()
             return self.json(200, {"ok": True})
         return self.send(404, "not found")
+
+    def upload_proxy(self, query):
+        """Stream a print file (up to 500 MB) straight through to PrintView without holding it in memory."""
+        import http.client
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if n <= 0 or n > 500 * 1024 * 1024:
+            return self.json(413, {"ok": False, "error": "File too big (500 MB max)"})
+        host, port = APP.split("//", 1)[1].split(":")
+        c = http.client.HTTPConnection(host, int(port), timeout=300)
+        try:
+            c.putrequest("POST", "/api/upload?" + query)
+            c.putheader("Content-Type", "application/octet-stream")
+            c.putheader("Content-Length", str(n))
+            c.endheaders()
+            left = n
+            while left:
+                chunk = self.rfile.read(min(65536, left))
+                if not chunk:
+                    break
+                c.send(chunk)
+                left -= len(chunk)
+            r = c.getresponse()
+            return self.send(r.status, r.read().decode(errors="replace"), "application/json")
+        except Exception:
+            return self.json(502, {"ok": False, "error": "Upload didn't reach PrintView"})
+        finally:
+            c.close()
 
     def proxy(self, method, sub):
         data = self.body() if method == "POST" else None
