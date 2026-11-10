@@ -241,6 +241,10 @@ class SDCard:
         """Stream a (large) file chunk by chunk, e.g. a timelapse to the phone."""
         self._session(lambda f: f.retrbinary(f"RETR {path}", on_chunk, blocksize=65536), wait=60)
 
+    def delete(self, path):
+        self._session(lambda f: f.delete(path))
+        self.invalidate()
+
     def upload(self, local, name):
         """Copy a local file onto the root of the printer's SD card."""
         with open(local, "rb") as fp:

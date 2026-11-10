@@ -44,13 +44,17 @@ public class FilesActivity extends Base {
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         p.addView(list);
-        note(p, "Upload a sliced .gcode.3mf from your phone (works away from home too), or send from Bambu Studio / OrcaSlicer at home. New files appear at the top.");
+        note(p, "Upload a sliced .gcode.3mf from your phone (works away from home too), or send from Bambu Studio / OrcaSlicer at home. New files appear at the top. Press and hold a file to download or delete it.");
         load(false);
     }
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == 42 && res == RESULT_OK && data != null && data.getData() != null && pending != null) {
+            download(data.getData(), pending);
+            return;
+        }
         if (req != 41 || res != RESULT_OK || data == null || data.getData() == null) return;
         final android.net.Uri uri = data.getData();
         String name = "upload.gcode.3mf";
@@ -165,6 +169,83 @@ public class FilesActivity extends Base {
                 startActivity(it);
             }
         });
+        r.setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) { fileMenu(f); return true; }
+        });
         return r;
+    }
+
+    private JSONObject pending;
+
+    private void fileMenu(final JSONObject f) {
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle(f.optString("title"))
+                .setItems(new String[]{"Download to phone", "Delete from SD card"}, new android.content.DialogInterface.OnClickListener() {
+                    public void onClick(android.content.DialogInterface d, int which) {
+                        if (which == 0) {
+                            pending = f;
+                            Intent it = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                            it.addCategory(Intent.CATEGORY_OPENABLE);
+                            it.setType("application/octet-stream");
+                            it.putExtra(Intent.EXTRA_TITLE, f.optString("name", f.optString("title") + ".gcode.3mf"));
+                            startActivityForResult(it, 42);
+                        } else {
+                            new android.app.AlertDialog.Builder(FilesActivity.this, android.R.style.Theme_Material_Dialog_Alert)
+                                    .setTitle("Delete " + f.optString("title") + "?")
+                                    .setMessage("It's removed from the printer's SD card. This can't be undone.")
+                                    .setNegativeButton("Cancel", null)
+                                    .setPositiveButton("Delete", new android.content.DialogInterface.OnClickListener() {
+                                        public void onClick(android.content.DialogInterface d2, int w) {
+                                            status.setText("Deleting...");
+                                            post("/api/files/delete", "{\"path\":" + JSONObject.quote(f.optString("path")) + "}", new Done<JSONObject>() {
+                                                public void run(JSONObject v, String e) {
+                                                    android.widget.Toast.makeText(FilesActivity.this, e == null ? "Deleted" : e, android.widget.Toast.LENGTH_LONG).show();
+                                                    load(true);
+                                                }
+                                            });
+                                        }
+                                    }).show();
+                        }
+                    }
+                }).show();
+    }
+
+    private void download(final android.net.Uri dest, final JSONObject f) {
+        status.setText("Downloading " + f.optString("title") + "...");
+        new Thread(new Runnable() {
+            public void run() {
+                String msg;
+                java.net.HttpURLConnection h = null;
+                try {
+                    h = Api.stream(FilesActivity.this, "/api/files/download?path=" + java.net.URLEncoder.encode(f.optString("path"), "UTF-8"));
+                    h.setReadTimeout(300000);
+                    int code = h.getResponseCode();
+                    if (code != 200) throw new java.io.IOException("HTTP " + code);
+                    long total = h.getContentLength(), got = 0, last = 0;
+                    java.io.InputStream in = h.getInputStream();
+                    java.io.OutputStream out = getContentResolver().openOutputStream(dest);
+                    byte[] buf = new byte[65536];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        out.write(buf, 0, n);
+                        got += n;
+                        if (total > 0 && System.currentTimeMillis() - last > 300) {
+                            last = System.currentTimeMillis();
+                            final int pc = (int) (got * 100 / total);
+                            ui.post(new Runnable() { public void run() { status.setText("Downloading - " + pc + "%"); } });
+                        }
+                    }
+                    out.close();
+                    in.close();
+                    msg = "Saved " + f.optString("title");
+                } catch (Exception e) {
+                    msg = "Download failed: " + e.getMessage();
+                } finally {
+                    if (h != null) h.disconnect();
+                }
+                final String m = msg;
+                ui.post(new Runnable() { public void run() { if (!isFinishing()) { android.widget.Toast.makeText(FilesActivity.this, m, android.widget.Toast.LENGTH_LONG).show(); load(false); } } });
+            }
+        }).start();
     }
 }

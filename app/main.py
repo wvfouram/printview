@@ -121,6 +121,8 @@ def build_app():
     app.router.add_get("/api/ping", lambda r: web.json_response({"ok": True, "remote": bool(r.get("remote"))}))
     app.router.add_get("/api/files", api_files)
     app.router.add_post("/api/upload", api_upload)
+    app.router.add_get("/api/files/download", api_file_download)
+    app.router.add_post("/api/files/delete", api_file_delete)
     app.router.add_get("/api/files/info", api_file_info)
     app.router.add_get("/api/files/plate.png", api_file_plate)
     app.router.add_post("/api/print", api_print_start)
@@ -630,6 +632,41 @@ async def api_upload(request):
             pass
     request.app["events"].add("cmd", f"Uploaded {name} ({size // 1024} KB)")
     return web.json_response({"ok": True, "name": name, "path": "/" + name, "size": size})
+
+
+async def _known_file(app, path):
+    files = await _run(app["sd"].models)
+    return next((f for f in files if f["path"] == path), None)
+
+
+async def api_file_download(request):
+    path = request.query.get("path", "")
+    try:
+        f = await _known_file(request.app, path)
+        if not f:
+            raise web.HTTPNotFound()
+        local = await _run(request.app["sd"].fetch, path, f.get("size"))
+    except web.HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        return _sd_error(e)
+    return web.FileResponse(local, headers={"Content-Type": "application/octet-stream",
+                                            "Content-Disposition": f'attachment; filename="{f["name"]}"'})
+
+
+async def api_file_delete(request):
+    b = await request.json()
+    path = str(b.get("path") or "")
+    if request.app["printer"].status().get("busy") and path.endswith(os.path.basename(request.app["printer"].status().get("file") or "\0")):
+        return web.json_response({"ok": False, "error": "That file is printing right now"}, status=409)
+    try:
+        if not await _known_file(request.app, path):
+            return web.json_response({"ok": False, "error": "File not found on the SD card"}, status=404)
+        await _run(request.app["sd"].delete, path)
+    except Exception as e:  # noqa: BLE001
+        return _sd_error(e)
+    request.app["events"].add("cmd", f"Deleted {os.path.basename(path)} from the SD card")
+    return web.json_response({"ok": True})
 
 
 async def api_files(request):
