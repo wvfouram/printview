@@ -429,7 +429,7 @@ class BambuPrinter:
         """Start/stop the dryer of an AMS HT / AMS 2 Pro. unit = the AMS number shown in the app (1, 129...)."""
         if self.busy and on:
             raise PermissionError("the printer only allows drying while it is idle")
-        temp = max(30, min(70, int(temp)))
+        temp = max(30, min(85, int(temp)))   # AMS HT goes to 85, AMS 2 Pro to 65
         hours = max(1, min(24, int(round(float(hours)))))
         return self._publish({"print": {
             "sequence_id": self._next_seq(), "command": "ams_filament_drying", "ams_id": int(unit) - 1,
