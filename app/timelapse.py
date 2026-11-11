@@ -257,14 +257,15 @@ class Timelapse:
         out, tmp = os.path.join(d, "timelapse.mp4"), os.path.join(d, "render.tmp.mp4")
         vf = ",".join([
             "deflicker=size=5:mode=pm",
+            "hqdn3d=3:2:4:3",                      # clean up the camera's low-light grain first
             f"minterpolate=fps={OUT_FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
             f"scale={OUT_W}:-2:flags=lanczos",
-            "unsharp=5:5:0.5",
+            "unsharp=5:5:0.25:5:5:0",              # gentle, luma only (stronger made the grain worse)
             "tpad=stop_mode=clone:stop_duration=3",
         ])
         cmd = ["nice", "-n", "19", "ffmpeg", "-y", "-loglevel", "error",
                "-framerate", str(IN_FPS), "-i", os.path.join(d, "frames", "%05d.jpg"),
-               "-vf", vf, "-c:v", "libx264", "-preset", "slow", "-crf", "17",
+               "-vf", vf, "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-tune", "film",
                "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-threads", "3", tmp]
         self.msg = f"Rendering {tid} (this takes a while)"
         r = subprocess.run(cmd, capture_output=True, text=True)
