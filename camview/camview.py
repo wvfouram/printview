@@ -573,6 +573,8 @@ class H(BaseHTTPRequestHandler):
             if act == "gcode":
                 return self.json(403, {"ok": False, "error": "Raw G-code needs the master code"})
             return self.proxy(method, sub, data)
+        if sub == "/api/streams" and s["role"] != "master":
+            return self.json(403, {"ok": False, "error": "Needs the master code"})
         if method == "POST" and sub == "/api/prints/photos/delete" and s["role"] != "master":
             return self.json(403, {"ok": False, "error": "Needs the master code"})
         if method == "POST" and sub == "/api/train/photo":     # teaching the detector: master code only

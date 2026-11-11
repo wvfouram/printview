@@ -130,6 +130,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
 .pthumb{width:52px;height:52px;flex:none;border-radius:10px;background:var(--s2);object-fit:contain;margin-right:12px}
 .v3d-wait{height:var(--v3d-h,380px);display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;border-radius:14px;background:var(--s2);color:var(--mu)}
 @media (max-width:600px){#p3d{--v3d-h:300px}}
+.flow{margin:10px 0 0;max-height:340px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font:11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
 </style>
 </head>
 <body>
@@ -641,7 +642,7 @@ function bedServo(b) { window._bc = b;
 const VIEWS = {};
 const TABS = [["watch", "Watch"], ["controls", "Controls"], ["ams", "AMS"], ["print", "Print from SD"], ["job", "Current job"], ["timelapses", "Timelapses"], ["history", "History"], ["train", "Train"]];
 const RO_TABS = [["watch", "Watch"], ["controls", "Settings"], ["ams", "AMS"], ["job", "Current job"]];
-function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Command center"]]) : TABS; }
+function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["flow", "Data flow"], ["admin", "Command center"]]) : TABS; }
 function renderTabs() {
   const tabs = tabList();
   $("#tabs").innerHTML = tabs.map(([k, n]) => `<button data-k="${k}" class="${k === tab ? "on" : ""}"${k === "admin" ? ' style="color:var(--ac)"' : ""}>${n}</button>`).join("");
@@ -1358,6 +1359,47 @@ VIEWS.train = {
         try { await api(`/api/prints/${encodeURIComponent(id)}/delete`, {}); box.innerHTML = ""; this.loadList(); this.loadModel(); } catch (e) { toast(e.message); }
       }, true);
     } catch (e) { box.innerHTML = `<div class="card" style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
+
+// ---------- Data flow (master code only): live Arduino, printer and web traffic through the Pi
+const FLOW = [["p1s", "Pi ↔ P1S (MQTT)"], ["uno", "Pi ↔ Arduino (bed relay)"], ["web", "Web ↔ Pi"]];
+VIEWS.flow = {
+  seq: 0, lines: {p1s: [], uno: [], web: []}, paused: false, timer: null, hide: {}, filter: "",
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="row"><div class="grow mu sm">Live traffic through the Pi, newest at the bottom. <span style="color:var(--ok)">Green</span> = into the Pi, <span style="color:var(--ac)">amber</span> = out of the Pi.</div></div>
+      <div class="row" style="margin-top:10px;gap:6px"><input id="flF" placeholder="Filter (e.g. gcode_state, ams, temp)" class="grow"><button class="btn sm" id="flP">Pause</button><button class="btn sm" id="flC">Clear</button></div></div>
+      ${FLOW.map(([k, t]) => `<div class="card"><div class="row" style="cursor:pointer" data-fh="${k}"><div class="h grow" style="margin:0">${t}</div><span class="chip" id="flN-${k}">0</span></div>
+        <pre id="flB-${k}" class="flow"></pre></div>`).join("")}`;
+    $("#flP").onclick = () => { this.paused = !this.paused; $("#flP").textContent = this.paused ? "Resume" : "Pause"; if (!this.paused) this.paint(); };
+    $("#flC").onclick = () => { for (const k in this.lines) this.lines[k] = []; this.paint(); };
+    $("#flF").value = this.filter;
+    $("#flF").oninput = e => { this.filter = e.target.value.toLowerCase(); this.paint(); };
+    el.querySelectorAll("[data-fh]").forEach(h => h.onclick = () => { const k = h.dataset.fh; this.hide[k] = !this.hide[k]; $("#flB-" + k).style.display = this.hide[k] ? "none" : ""; });
+    for (const k in this.hide) if (this.hide[k]) $("#flB-" + k).style.display = "none";
+    this.paint(); this.poll();
+  },
+  async poll() {
+    clearTimeout(this.timer);
+    if (tab !== "flow") return;
+    try {
+      const j = await api("/api/streams?since=" + this.seq);
+      this.seq = j.seq || this.seq;
+      for (const [k] of FLOW) for (const r of (j.streams && j.streams[k]) || []) { this.lines[k].push(r); if (this.lines[k].length > 300) this.lines[k].shift(); }
+      if (!this.paused) this.paint();
+    } catch (e) {}
+    this.timer = setTimeout(() => this.poll(), 1000);
+  },
+  paint() {
+    for (const [k] of FLOW) {
+      const b = $("#flB-" + k); if (!b) return;
+      const f = this.filter, rows = this.lines[k].filter(r => !f || r.s.toLowerCase().includes(f)).slice(-120);
+      const stick = b.scrollTop + b.clientHeight >= b.scrollHeight - 30;
+      b.innerHTML = rows.length ? rows.map(r => { const out = /^Pi\s*>/.test(r.s);
+        return `<span class="fa">${new Date(r.t * 1000).toLocaleTimeString([], {hour12: false})}</span> <span style="color:${out ? "var(--ac)" : "var(--ok)"}">${esc(r.s)}</span>`; }).join("\n") : '<span class="mu">Waiting for data...</span>';
+      $("#flN-" + k).textContent = this.lines[k].length;
+      if (stick) b.scrollTop = b.scrollHeight;
+    }
   }
 };
 
