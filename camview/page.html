@@ -1126,6 +1126,7 @@ VIEWS.print = {
           <div class="div"></div>
           <label class="ck"><input type="checkbox" id="oLvl" checked>Bed leveling</label>
           <label class="ck"><input type="checkbox" id="oVib" checked>Vibration calibration</label><label class="ck"><input type="checkbox" id="oTl">Timelapse</label>
+          <div class="row" style="margin-top:8px"><span class="grow">Speed</span><select id="oSpd"><option value="1">Silent</option><option value="2" selected>Standard</option><option value="3">Sport</option><option value="4">Ludicrous</option></select></div>
           <button class="btn pri" id="pStart" style="width:100%;margin-top:12px">Start print</button>
           <div class="sched" id="pSchedBox"></div></div>`;
         load3d(f, plate);
@@ -1138,7 +1139,7 @@ VIEWS.print = {
           const arr = new Array(Math.max(1, ...map.map(m => m[0]))).fill(-1);
           map.forEach(([id, slot]) => arr[id - 1] = slot);
           return {path: f.path, plate: plate.index, use_ams: !useExt, ams_mapping: useExt ? [] : arr, timelapse: $("#oTl").checked,
-            bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked};
+            bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked, speed: +$("#oSpd").value};
         };
         schedPicker($("#pSchedBox"), at => {
           confirmBox("Schedule this print?", f.title + "\nStarts " + fmtWhen(at) + "\nMake sure the plate is clear before then.", "Schedule", async () => {
@@ -1151,7 +1152,7 @@ VIEWS.print = {
           const arr = new Array(Math.max(1, ...map.map(m => m[0]))).fill(-1);
           map.forEach(([id, slot]) => arr[id - 1] = slot);
           const body = {path: f.path, plate: plate.index, use_ams: !useExt, ams_mapping: useExt ? [] : arr, timelapse: $("#oTl").checked,
-            bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked};
+            bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked, speed: +$("#oSpd").value};
           confirmBox("Start this print?", f.title + " · plate " + plate.index + (useExt ? "\nFrom the external spool." : ""), "Start", async () => {
             try { await api("/api/print", body); toast("Print started"); tab = "watch"; renderTabs(); } catch (e) { toast(e.message); }
           });

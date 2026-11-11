@@ -33,6 +33,7 @@ public class StartActivity extends Base {
     private ImageView img;
     private TextView meta, status;
     private Switch useAms, timelapse, level, flow, vib;
+    private int speed = 2;
     private final List<int[]> mapping = new ArrayList<>();   // {filamentId, slot}
     private final List<TextView> mapLabels = new ArrayList<>();
 
@@ -118,6 +119,40 @@ public class StartActivity extends Base {
         level = sw(oc, "Bed leveling", "Auto bed leveling before the print", true);
         flow = new Switch(this); flow.setChecked(false);   // P1S has no automatic K calibration
         vib = sw(oc, "Vibration calibration", "Resonance compensation before the print", true);
+        LinearLayout sr = Ui.row(this);
+        sr.setPadding(0, Ui.dp(this, 14), 0, 0);
+        LinearLayout st = new LinearLayout(this);
+        st.setOrientation(LinearLayout.VERTICAL);
+        st.addView(Ui.text(this, "Speed", 15, Ui.TEXT, true));
+        st.addView(Ui.text(this, "Set once the print is running", 12, Ui.MUTED, false));
+        sr.addView(st, Ui.weight(1));
+        oc.addView(sr);
+        LinearLayout segs = Ui.row(this);
+        final String[] names = {"Silent", "Standard", "Sport", "Ludicrous"};
+        final Button[] sb = new Button[4];
+        for (int i = 0; i < 4; i++) {
+            final int lvl = i + 1;
+            sb[i] = Ui.button(this, names[i], Ui.SURFACE2, Ui.TEXT, 0);
+            sb[i].setTextSize(12);
+            sb[i].setMinHeight(Ui.dp(this, 38));
+            sb[i].setPadding(0, 0, 0, 0);
+            LinearLayout.LayoutParams lp = Ui.weight(1);
+            if (i > 0) lp.leftMargin = Ui.dp(this, 4);
+            segs.addView(sb[i], lp);
+            sb[i].setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    speed = lvl;
+                    for (int k = 0; k < 4; k++) {
+                        sb[k].setBackground(Ui.box(StartActivity.this, k == lvl - 1 ? Ui.ACCENT : Ui.SURFACE2, 0, 10));
+                        sb[k].setTextColor(k == lvl - 1 ? Color.parseColor("#111111") : Ui.TEXT);
+                    }
+                }
+            });
+        }
+        LinearLayout.LayoutParams sgl = new LinearLayout.LayoutParams(-1, -2);
+        sgl.topMargin = Ui.dp(this, 8);
+        oc.addView(segs, sgl);
+        sb[1].performClick();
         p.addView(oc);
 
         Button go = Ui.button(c, "Start print", Ui.ACCENT, Color.parseColor("#111111"), 0);
@@ -348,7 +383,7 @@ public class StartActivity extends Base {
         return "{\"path\":" + JSONObject.quote(path) + ",\"plate\":" + plate.optInt("index")
                 + ",\"use_ams\":" + ams + ",\"ams_mapping\":" + (ams ? am.toString() : "[]")
                 + ",\"timelapse\":" + timelapse.isChecked() + ",\"bed_leveling\":" + level.isChecked()
-                + ",\"flow_cali\":false,\"vibration_cali\":" + vib.isChecked() + "}";
+                + ",\"flow_cali\":false,\"vibration_cali\":" + vib.isChecked() + ",\"speed\":" + speed + "}";
     }
 
     private void start() {
@@ -366,7 +401,7 @@ public class StartActivity extends Base {
         final String json = "{\"path\":" + JSONObject.quote(path) + ",\"plate\":" + plate.optInt("index")
                 + ",\"use_ams\":" + ams + ",\"ams_mapping\":" + (ams ? am.toString() : "[]")
                 + ",\"timelapse\":" + timelapse.isChecked() + ",\"bed_leveling\":" + level.isChecked()
-                + ",\"flow_cali\":" + flow.isChecked() + ",\"vibration_cali\":" + vib.isChecked() + "}";
+                + ",\"flow_cali\":" + flow.isChecked() + ",\"vibration_cali\":" + vib.isChecked() + ",\"speed\":" + speed + "}";
         confirm("Start this print?", getIntent().getStringExtra("title") + "  ·  plate " + plate.optInt("index")
                         + (ams ? "" : "\nFrom the external spool."), "Start",
                 new Runnable() {

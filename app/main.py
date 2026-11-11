@@ -885,7 +885,39 @@ def _start_from_body(app, b):
                                     bool(b.get("vibration_cali", True)))
     if ok:
         app["job_hint"].update(path=b.get("path"), plate=int(b.get("plate", 1)), t=time.time())
+        try:
+            lvl = int(b.get("speed") or 2)
+        except (TypeError, ValueError):
+            lvl = 2
+        if lvl in (1, 3, 4):
+            threading.Thread(target=_speed_when_running, args=(app, lvl), daemon=True, name="startspeed").start()
     return ok
+
+
+def _speed_when_running(app, lvl):
+    """The printer resets the speed when a print starts, so set it once printing has really begun
+    (after heating and calibration), then once more a minute later in case the first layer reset it."""
+    pr = app["printer"]
+    t0 = time.time()
+    while time.time() - t0 < 3 * 3600:
+        time.sleep(5)
+        st = pr.status()
+        if st.get("state") in ("FINISH", "FAILED", "IDLE") and time.time() - t0 > 120:
+            return
+        if st.get("state") == "RUNNING" and (st.get("layer") or 0) >= 1:
+            for _ in range(2):
+                try:
+                    pr.set_speed(lvl)
+                except Exception:  # noqa: BLE001
+                    pass
+                time.sleep(60)
+                if pr.status().get("speed_level") == lvl:
+                    break
+            app["events"].add("cmd", f"Speed set to {SPEED_NAMES.get(lvl, lvl)} for this print")
+            return
+
+
+SPEED_NAMES = {1: "Silent", 2: "Standard", 3: "Sport", 4: "Ludicrous"}
 
 
 async def api_schedule(request):
