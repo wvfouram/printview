@@ -623,7 +623,11 @@ public class ControlsActivity extends Activity {
                 JSONObject p = null;
                 try {
                     Api.Resp r = Api.get(ControlsActivity.this, "/api/status", null, 6000);
-                    if (r.code == 200) p = new JSONObject(r.text()).optJSONObject("printer");
+                    if (r.code == 200) {
+                        JSONObject all = new JSONObject(r.text());
+                        p = all.optJSONObject("printer");
+                        dev = all.optJSONObject("device");
+                    }
                 } catch (Exception ignored) { }
                 final JSONObject fp = p;
                 ui.post(new Runnable() {
@@ -636,6 +640,8 @@ public class ControlsActivity extends Activity {
             }
         });
     }
+
+    private JSONObject dev;
 
     private void render(JSONObject p) {
         printer = p;
@@ -684,11 +690,26 @@ public class ControlsActivity extends Activity {
         StringBuilder sb = new StringBuilder();
         sb.append("State     ").append(conn ? p.optString("state") : "OFFLINE");
         if (!p.isNull("stage")) sb.append("\nStage     ").append(p.optString("stage"));
+        if (dev != null && !dev.isNull("prepare_pct")) sb.append(" (file ").append(dev.optInt("prepare_pct")).append("%)");
+        if (dev != null && !dev.isNull("ams_step")) sb.append("\nAMS       ").append(dev.optString("ams_step"));
         if (!p.isNull("speed_name")) sb.append("\nSpeed     ").append(p.optString("speed_name"));
         if (fans != null && !fans.isNull("heatbreak")) sb.append("\nHeatbreak ").append(fans.optInt("heatbreak")).append("% fan");
         if (!p.isNull("wifi")) sb.append("\nWi-Fi     ").append(p.optString("wifi"));
         if (!p.isNull("nozzle_diameter")) sb.append("\nNozzle    ").append(p.optString("nozzle_diameter")).append(" mm");
-        if (p.optInt("print_error") != 0) sb.append("\nError     ").append(Integer.toHexString(p.optInt("print_error")).toUpperCase());
+        if (p.optInt("print_error") != 0) { String e = String.format("%08X", p.optLong("print_error")); sb.append("\nError     ").append(e.substring(0, 4)).append("_").append(e.substring(4)); }
+        JSONArray mods = dev == null ? null : dev.optJSONArray("modules");
+        JSONArray ups = dev == null ? null : dev.optJSONArray("updates");
+        for (int i = 0; ups != null && i < ups.length(); i++) {
+            JSONObject u = ups.optJSONObject(i);
+            sb.append("\nUPDATE    ").append(u.optString("name")).append(" ").append(u.optString("cur")).append(" -> ").append(u.optString("new"));
+        }
+        if (mods != null && mods.length() > 0) {
+            sb.append("\n\nFirmware and serial numbers");
+            for (int i = 0; i < mods.length(); i++) {
+                JSONObject m = mods.optJSONObject(i);
+                sb.append("\n").append(m.optString("name")).append("\n  v").append(m.optString("sw")).append("  SN ").append(m.optString("sn"));
+            }
+        }
         info.setText(sb.toString());
         JSONArray h = p.optJSONArray("hms");
         if (h != null && h.length() > 0) {

@@ -601,6 +601,7 @@ class H(BaseHTTPRequestHandler):
                 try:
                     with urllib.request.urlopen(APP + "/api/status", timeout=6) as r:
                         j = json.loads(r.read())
+                    j.pop("device", None)                 # serial numbers stay private
                     for k in ("events", "training"):
                         j.pop(k, None)
                     pr = j.get("printer") or {}

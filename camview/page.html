@@ -775,7 +775,8 @@ VIEWS.controls = {
       <label class="ck"><input type="checkbox" id="cbBed" checked>Bed leveling</label><label class="ck"><input type="checkbox" id="cbVib" checked>Vibration compensation</label>
       <label class="ck"><input type="checkbox" id="cbMot">Motor noise cancellation</label>
       <button class="btn sm pri" id="cCal" style="margin-top:8px">Start calibration</button></div>
-    <div class="card"><div class="h">Printer info</div><div id="cInfo" class="sm" style="line-height:1.8"></div></div>`;
+    <div class="card"><div class="h">Printer info</div><div id="cInfo" class="sm" style="line-height:1.8"></div></div>
+    <div class="card"><div class="h">Firmware and serial numbers</div><div id="cDev"></div></div>`;
     el.querySelectorAll("#cSpeed button").forEach(b => b.onclick = () => { paintSeg("#cSpeed", b.dataset.v); cmd("speed", {level: +b.dataset.v}, "Speed: " + b.textContent); });
     el.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
       const t = b.dataset.t, inp = $("#cIn_" + t);
@@ -838,10 +839,18 @@ VIEWS.controls = {
     document.querySelectorAll("[data-jog],#cMotors,[data-ex]").forEach(b => b.disabled = !!p.busy);
     $("#cCal").disabled = !!p.busy;
     const hms = p.hms || [];
-    $("#cInfo").innerHTML = `Stage: ${esc(p.stage || "-")}<br>Speed: ${esc(p.speed_name || "-")}${p.speed_pct ? " (" + p.speed_pct + "%)" : ""}<br>
+    const dv = (status && status.device) || {};
+    const err = p.print_error ? (p.print_error >>> 0).toString(16).toUpperCase().padStart(8, "0") : "";
+    $("#cInfo").innerHTML = `Stage: ${esc(p.stage || "-")}${dv.prepare_pct != null ? " (file " + dv.prepare_pct + "%)" : ""}<br>
+      ${dv.ams_step ? "AMS: " + esc(dv.ams_step) + "<br>" : ""}
+      ${err ? `<span style="color:var(--bad)">Print error ${err.slice(0, 4)}_${err.slice(4)}</span><br>` : ""}Speed: ${esc(p.speed_name || "-")}${p.speed_pct ? " (" + p.speed_pct + "%)" : ""}<br>
       Wi-Fi: ${esc(p.wifi || "-")} · Nozzle: ${esc(p.nozzle_diameter || "-")} mm · SD card: ${esc(opt.sdcard || "-")}
       ${hms.length ? "<br><span style='color:var(--bad)'>Printer alerts:</span> " + hms.map(h => { const c = h.replace("HMS_", ""); const seg = c.length === 17 ? c.slice(0, 4) + "_" + c.slice(4, 8) + "_" + c.slice(9, 13) + "_" + c.slice(13) : c;
         return `<a href="https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/${seg}" target="_blank" rel="noopener noreferrer">${esc(h)}</a>`; }).join(", ") : ""}`;
+    const mods = dv.modules || [];
+    $("#cDev").innerHTML = (dv.updates && dv.updates.length ? `<div style="color:var(--ac);margin-bottom:8px">Firmware update available: ${dv.updates.map(u => esc(u.name) + " " + esc(u.cur) + " → " + esc(u.new)).join(", ")}</div>` : "")
+      + (mods.length ? `<div class="list">${mods.map(m => `<div><div class="grow"><div style="font-weight:600">${esc(m.name)}</div><div class="fa sm">SN ${esc(m.sn || "-")}</div></div><span class="num sm">${esc(m.sw || "-")}</span></div>`).join("")}</div>`
+        : '<div class="mu sm">Asking the printer...</div>');
   }
 };
 function slotActions(t) {

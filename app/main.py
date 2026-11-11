@@ -27,6 +27,7 @@ from .detector import DetectionLoop
 from .printer import BambuPrinter
 from . import sdcard as sd
 from . import gcode3d
+from .devinfo import DevInfo
 from . import remote as rm
 from .store import Events, Notifier, Settings
 from .trainer import Trainer
@@ -104,6 +105,7 @@ def build_app():
         if ok:
             app["events"].add("cmd", f"Scheduled print started: {os.path.basename(str(b.get('path')))}")
         return ok
+    app["devinfo"] = DevInfo(printer)
     app["history"] = History(printer, camera, data_dir, app["timelapse"])
     threading.Thread(target=_weekly_report, args=(app, data_dir), daemon=True, name="report").start()
     app["schedule"] = Scheduler(printer, data_dir, _sched_start, events,
@@ -310,6 +312,7 @@ def full_status(app):
         "hms": app["hms"].status(app["printer"]),
         "predict": app["predict"].status(),
         "schedule": {"next": app["schedule"].next_up()},
+        "device": app["devinfo"].status(),
     }
 
 
