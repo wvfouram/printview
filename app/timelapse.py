@@ -52,6 +52,7 @@ class Timelapse:
         self.render_q = []
         self.msg = ""
         self._lock = threading.Lock()
+        self.progress = None
         threading.Thread(target=self._loop, daemon=True, name="timelapse").start()
         threading.Thread(target=self._render_loop, daemon=True, name="tl-render").start()
 
@@ -78,7 +79,8 @@ class Timelapse:
                         "mb": round(os.path.getsize(vid) / 1e6, 1) if os.path.exists(vid) else None,
                         "bytes": os.path.getsize(vid) if os.path.exists(vid) else None,
                         "t": meta.get("t") or int(os.path.getmtime(d)),
-                        "rendering": self.rendering == name, "queued": name in self.render_q})
+                        "rendering": self.rendering == name, "queued": name in self.render_q,
+                        "progress": self.progress if self.rendering == name else None})
         return out
 
     def status(self):
@@ -266,11 +268,32 @@ class Timelapse:
         cmd = ["nice", "-n", "19", "ffmpeg", "-y", "-loglevel", "error",
                "-framerate", str(IN_FPS), "-i", os.path.join(d, "frames", "%05d.jpg"),
                "-vf", vf, "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-tune", "film",
-               "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-threads", "3", tmp]
+               "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-threads", "3",
+               "-progress", "pipe:1", "-nostats", tmp]
         self.msg = f"Rendering {tid} (this takes a while)"
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            raise RuntimeError((r.stderr or "ffmpeg error").strip()[-200:])
+        try:
+            n_in = len([n for n in os.listdir(os.path.join(d, "frames")) if n.endswith(".jpg")])
+        except OSError:
+            n_in = 0
+        total = max(1, int(n_in / IN_FPS * OUT_FPS + 3 * OUT_FPS))
+        t0 = time.time()
+        self.progress = {"pct": 0, "eta_s": None, "started": int(t0)}
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for line in p.stdout:                     # ffmpeg -progress: key=value lines
+            if line.startswith("frame="):
+                try:
+                    f = int(line.split("=", 1)[1])
+                except ValueError:
+                    continue
+                pct = min(99.9, f * 100 / total)
+                el = time.time() - t0
+                eta = int(el * (100 - pct) / pct) if pct > 0.5 else None
+                self.progress = {"pct": round(pct, 1), "eta_s": eta, "started": int(t0)}
+        err = p.stderr.read()
+        p.wait()
+        self.progress = None
+        if p.returncode != 0:
+            raise RuntimeError((err or "ffmpeg error").strip()[-200:])
         os.replace(tmp, out)
         self._make_web(tid)          # light copy for the web link
         self.msg = f"Video ready: {tid}"

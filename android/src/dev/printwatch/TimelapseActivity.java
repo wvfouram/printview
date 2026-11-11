@@ -68,7 +68,13 @@ public class TimelapseActivity extends Base {
                         t.put("thumbUrl", "/api/timelapse/" + q(id) + "/thumb.jpg");
                         t.put("pi", id);
                         t.put("video", x.optBoolean("video"));
-                        t.put("state", x.optBoolean("rendering") ? "Making video..." : x.optBoolean("queued") ? "Queued" : "");
+                        String st = x.optBoolean("queued") ? "Queued" : "";
+                        if (x.optBoolean("rendering")) {
+                            JSONObject pr = x.optJSONObject("progress");
+                            st = "Making video" + (pr == null ? "..." : " " + Math.round(pr.optDouble("pct")) + "%");
+                            if (pr != null && !pr.isNull("eta_s")) st += " (~" + Ui.mins(pr.optLong("eta_s") / 60.0) + " left)";
+                        }
+                        t.put("state", st);
                         busy |= x.optBoolean("rendering") || x.optBoolean("queued");
                         piList.addView(row(t));
                     } catch (Exception ignored) { }
