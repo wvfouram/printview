@@ -100,5 +100,14 @@ class DevInfo:
             prep = None
         if (p.get("gcode_state") not in ("PREPARE", "SLICING")) or prep in (None, 0):
             prep = None if p.get("gcode_state") not in ("PREPARE", "SLICING") else prep
-        return {"modules": self.modules, "checked": int(self.got) or None, "updates": new,
+        on = p.get("online") if isinstance(p.get("online"), dict) else {}
+        try:
+            line = int(p.get("mc_print_line_number") or 0) or None
+        except (TypeError, ValueError):
+            line = None
+        hub = {"ahb": on.get("ahb"), "rfid": on.get("rfid"),
+               "units": len(a.get("ams") or []), "exist_bits": a.get("ams_exist_bits"),
+               "spools_bits": a.get("tray_exist_bits"), "reading_bits": a.get("tray_reading_bits"),
+               "rfid_status": p.get("ams_rfid_status"), "version": a.get("version")}
+        return {"gcode_line": line, "hub": hub, "modules": self.modules, "checked": int(self.got) or None, "updates": new,
                 "update_flag": up.get("new_version_state"), "ams_step": ams, "prepare_pct": prep}

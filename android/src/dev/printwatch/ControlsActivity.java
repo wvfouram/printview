@@ -692,6 +692,18 @@ public class ControlsActivity extends Activity {
         if (!p.isNull("stage")) sb.append("\nStage     ").append(p.optString("stage"));
         if (dev != null && !dev.isNull("prepare_pct")) sb.append(" (file ").append(dev.optInt("prepare_pct")).append("%)");
         if (dev != null && !dev.isNull("ams_step")) sb.append("\nAMS       ").append(dev.optString("ams_step"));
+        if (dev != null && dev.optLong("gcode_line") > 0) sb.append("\nG-code    line ").append(String.format("%,d", dev.optLong("gcode_line")));
+        JSONObject hub = dev == null ? null : dev.optJSONObject("hub");
+        if (hub != null) {
+            sb.append("\nAMS hub   ").append(hub.optBoolean("ahb") ? "online" : "not seen")
+              .append(", RFID ").append(hub.optBoolean("rfid") ? "online" : "not seen")
+              .append(", ").append(hub.optInt("units")).append(" units");
+            int bits = 0;
+            try { bits = Integer.parseInt(hub.optString("spools_bits", "0"), 16); } catch (Exception ignored) { }
+            StringBuilder sp = new StringBuilder();
+            for (int i = 0; i < 16; i++) if ((bits & (1 << i)) != 0) sp.append(sp.length() > 0 ? ", " : "").append(i / 4 + 1).append("·").append(i % 4 + 1);
+            sb.append("\nSpools in ").append(sp.length() > 0 ? sp.toString() : "none");
+        }
         if (!p.isNull("speed_name")) sb.append("\nSpeed     ").append(p.optString("speed_name"));
         if (fans != null && !fans.isNull("heatbreak")) sb.append("\nHeatbreak ").append(fans.optInt("heatbreak")).append("% fan");
         if (!p.isNull("wifi")) sb.append("\nWi-Fi     ").append(p.optString("wifi"));

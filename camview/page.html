@@ -840,9 +840,12 @@ VIEWS.controls = {
     $("#cCal").disabled = !!p.busy;
     const hms = p.hms || [];
     const dv = (status && status.device) || {};
+    const spools = b => { const n = parseInt(b || "0", 16); if (isNaN(n)) return "-"; const l = []; for (let i = 0; i < 16; i++) if (n & (1 << i)) l.push(`${(i >> 2) + 1}·${(i & 3) + 1}`); return l.join(", ") || "none"; };
     const err = p.print_error ? (p.print_error >>> 0).toString(16).toUpperCase().padStart(8, "0") : "";
     $("#cInfo").innerHTML = `Stage: ${esc(p.stage || "-")}${dv.prepare_pct != null ? " (file " + dv.prepare_pct + "%)" : ""}<br>
       ${dv.ams_step ? "AMS: " + esc(dv.ams_step) + "<br>" : ""}
+      ${dv.gcode_line ? "G-code line: " + dv.gcode_line.toLocaleString() + "<br>" : ""}
+      ${dv.hub ? `AMS hub: ${dv.hub.ahb ? "online" : "not seen"} · RFID reader: ${dv.hub.rfid ? "online" : "not seen"} · units: ${dv.hub.units} · spools in: ${spools(dv.hub.spools_bits)}${dv.hub.reading_bits && dv.hub.reading_bits !== "0" ? " · reading RFID" : ""}<br>` : ""}
       ${err ? `<span style="color:var(--bad)">Print error ${err.slice(0, 4)}_${err.slice(4)}</span><br>` : ""}Speed: ${esc(p.speed_name || "-")}${p.speed_pct ? " (" + p.speed_pct + "%)" : ""}<br>
       Wi-Fi: ${esc(p.wifi || "-")} · Nozzle: ${esc(p.nozzle_diameter || "-")} mm · SD card: ${esc(opt.sdcard || "-")}
       ${hms.length ? "<br><span style='color:var(--bad)'>Printer alerts:</span> " + hms.map(h => { const c = h.replace("HMS_", ""); const seg = c.length === 17 ? c.slice(0, 4) + "_" + c.slice(4, 8) + "_" + c.slice(9, 13) + "_" + c.slice(13) : c;
