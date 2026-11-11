@@ -1022,10 +1022,10 @@ VIEWS.print = {
     try {
       const j = await api("/api/files" + (refresh ? "?refresh=1" : ""));
       const files = Array.isArray(j) ? j : j.list || [];
-      $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=1&path=${encodeURIComponent(f.path)}" onerror="this.style.visibility='hidden'"><div class="grow"><div style="font-weight:600">${esc(f.title)}</div>
+      $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=1&path=${encodeURIComponent(f.path)}" onerror="this.style.visibility='hidden'"><div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(f.title)}">${esc(f.title)}</div>
         <div class="fa sm">${esc(f.date || "")} · ${(f.size / 1e6).toFixed(1)} MB</div></div>
-        <a class="btn sm" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download style="margin-right:6px">Download</a>
-        <button class="btn sm bad" data-del="${i}" style="margin-right:6px">Delete</button><span class="fa">›</span></div>`).join("") : '<div class="mu">No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer.</div>';
+        <a class="btn sm" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download style="margin:0 6px 0 10px;flex:none">Download</a>
+        <button class="btn sm bad" data-del="${i}" style="margin-right:6px;flex:none">Delete</button><span class="fa">›</span></div>`).join("") : '<div class="mu">No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer.</div>';
       $("#pList").querySelectorAll("[data-i]").forEach(r => r.onclick = () => this.open(files[+r.dataset.i]));
       $("#pList").querySelectorAll("[data-dl]").forEach(a => a.onclick = e => e.stopPropagation());
       $("#pList").querySelectorAll("[data-del]").forEach(b => b.onclick = e => {
