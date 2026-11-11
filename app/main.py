@@ -26,6 +26,7 @@ from .dataset import Dataset
 from .detector import DetectionLoop
 from .printer import BambuPrinter
 from . import sdcard as sd
+from . import gcode3d
 from . import remote as rm
 from .store import Events, Notifier, Settings
 from .trainer import Trainer
@@ -140,6 +141,7 @@ def build_app():
     app.router.add_post("/api/trash/restore", api_trash_restore)
     app.router.add_get("/api/files/info", api_file_info)
     app.router.add_get("/api/files/plate.png", api_file_plate)
+    app.router.add_get("/api/files/gcode3d", api_file_gcode3d)
     app.router.add_post("/api/print", api_print_start)
     app.router.add_get("/api/schedule", api_schedule)
     app.router.add_get("/api/history", api_history)
@@ -764,6 +766,29 @@ async def api_file_plate(request):
     if not png:
         raise web.HTTPNotFound()
     return web.Response(body=png, content_type="image/png", headers={"Cache-Control": "max-age=3600"})
+
+
+_G3D_LOCK = asyncio.Lock()
+
+
+async def api_file_gcode3d(request):
+    """Toolpath of one sliced plate for the 3D viewer (see gcode3d.py for the format)."""
+    path, idx = request.query.get("path", ""), int(request.query.get("plate", "1"))
+    try:
+        local = await _run(request.app["sd"].fetch, path)
+        async with _G3D_LOCK:          # one parse at a time, the Pi has better things to do
+            data = await _run(gcode3d.build, local, idx, os.path.join(env("DATA_DIR", "/data"), "g3d"))
+    except Exception as e:  # noqa: BLE001
+        return _sd_error(e)
+    if not data:
+        return web.json_response({"error": "This plate isn't sliced, so there is no toolpath to show."}, status=404)
+    hdr = {"Cache-Control": "max-age=3600"}
+    if "gzip" in request.headers.get("Accept-Encoding", ""):
+        hdr["Content-Encoding"] = "gzip"
+    else:
+        import gzip
+        data = gzip.decompress(data)
+    return web.Response(body=data, content_type="application/octet-stream", headers=hdr)
 
 
 STARTED_AT = time.time()

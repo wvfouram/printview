@@ -75,6 +75,23 @@ public class StartActivity extends Base {
         img = new ImageView(c);
         img.setScaleType(ImageView.ScaleType.FIT_CENTER);
         box.addView(img, new FrameLayout.LayoutParams(-1, Ui.dp(c, 240)));
+        Button v3 = Ui.button(c, "3D view", Ui.ACCENT, Color.parseColor("#111111"), 0);
+        v3.setTextSize(13);
+        v3.setMinHeight(Ui.dp(c, 38));
+        v3.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
+        FrameLayout.LayoutParams vl = new FrameLayout.LayoutParams(-2, Ui.dp(c, 38), android.view.Gravity.BOTTOM | android.view.Gravity.END);
+        vl.setMargins(0, 0, Ui.dp(c, 10), Ui.dp(c, 10));
+        box.addView(v3, vl);
+        View.OnClickListener open3d = new View.OnClickListener() {
+            public void onClick(View v) {
+                if (plate == null) return;
+                startActivity(new android.content.Intent(StartActivity.this, Viewer3DActivity.class)
+                        .putExtra("path", path).putExtra("plate", plate.optInt("index"))
+                        .putExtra("title", getIntent().getStringExtra("title")));
+            }
+        };
+        v3.setOnClickListener(open3d);
+        img.setOnClickListener(open3d);
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
         bl.topMargin = Ui.dp(c, 10);
         p.addView(box, bl);

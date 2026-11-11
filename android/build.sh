@@ -5,13 +5,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 JAR=/usr/lib/android-sdk/platforms/android-23/android.jar
 OUT=build
-rm -rf "$OUT"; mkdir -p "$OUT/gen" "$OUT/obj"
+rm -rf "$OUT"; mkdir -p "$OUT/gen" "$OUT/obj" "$OUT/assets"
+
+# The 3D viewer is shared with the web link: lift it out of camview/page.html
+{ cat assets-src/viewer3d.head.html
+  sed -n '/^\/\/ VIEWER3D-BEGIN/,/^\/\/ VIEWER3D-END/p' ../camview/page.html
+  cat assets-src/viewer3d.tail.html; } > "$OUT/assets/viewer3d.html"
+grep -q "window.PV3D" "$OUT/assets/viewer3d.html" || { echo "viewer not found in page.html"; exit 1; }
 
 aapt package -f -m -J "$OUT/gen" -M AndroidManifest.xml -S res -I "$JAR"
 javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 -bootclasspath "$JAR" \
       -d "$OUT/obj" $(find src "$OUT/gen" -name '*.java')
 dalvik-exchange --dex --output="$OUT/classes.dex" "$OUT/obj"
-aapt package -f -M AndroidManifest.xml -S res -I "$JAR" -F "$OUT/unsigned.apk"
+aapt package -f -M AndroidManifest.xml -S res -A "$OUT/assets" -I "$JAR" -F "$OUT/unsigned.apk"
 (cd "$OUT" && aapt add unsigned.apk classes.dex)
 zipalign -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 

@@ -1,0 +1,11 @@
+</script><script>
+(async () => {
+  const v = document.getElementById("v");
+  try {
+    const r = await fetch("toolpath");
+    if (!r.ok) { let m = "HTTP " + r.status; try { m = (await r.json()).error || m; } catch (e) {} v.innerHTML = '<div class="wait"></div>'; v.firstChild.textContent = m; return; }
+    const h = PV3D.mount(v, await r.arrayBuffer());
+    if (h.info) document.getElementById("i").textContent = h.info.size.map(x => Math.round(x)).join(" × ") + " mm · " + h.info.layers + " layers";
+  } catch (e) { v.innerHTML = '<div class="wait"></div>'; v.firstChild.textContent = "Couldn't load: " + e.message; }
+})();
+</script></body></html>
