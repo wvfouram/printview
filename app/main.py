@@ -337,10 +337,10 @@ async def api_tl_thumb(request):
 
 
 async def api_tl_video(request):
-    p = request.app["timelapse"].video_path(request.match_info["tid"])
+    p = request.app["timelapse"].video_path(request.match_info["tid"], web=request.query.get("web") == "1")
     if not p:
         raise web.HTTPNotFound()
-    return web.FileResponse(p, headers={"Content-Type": "video/mp4"})
+    return web.FileResponse(p, headers={"Content-Type": "video/mp4"})   # supports Range, so players can seek
 
 
 async def api_status(request):

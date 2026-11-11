@@ -97,11 +97,49 @@ class Timelapse:
             return None
         return os.path.join(fr, names[len(names) * 3 // 4]) if names else None
 
-    def video_path(self, tid):
+    def video_path(self, tid, web=False):
+        """web=True: a light 720p copy for streaming over the web link (made in the background the
+        first time it's asked for; until then the full video is served)."""
         if "/" in tid or ".." in tid:
             return None
         p = os.path.join(self.root, tid, "timelapse.mp4")
-        return p if os.path.exists(p) else None
+        if not os.path.exists(p):
+            return None
+        if web:
+            w = os.path.join(self.root, tid, "timelapse_web.mp4")
+            if os.path.exists(w):
+                return w
+            self._make_web(tid)
+        return p
+
+    def _make_web(self, tid):
+        with self._lock:
+            busy = getattr(self, "_web_busy", set())
+            self._web_busy = busy
+            if tid in busy:
+                return
+            busy.add(tid)
+
+        def run():
+            d = os.path.join(self.root, tid)
+            tmp = os.path.join(d, "web.tmp.mp4")
+            try:
+                r = subprocess.run(["nice", "-n", "19", "ffmpeg", "-y", "-loglevel", "error",
+                                    "-i", os.path.join(d, "timelapse.mp4"), "-vf", "scale='min(1280,iw)':-2",
+                                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-maxrate", "3M",
+                                    "-bufsize", "6M", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                                    "-threads", "2", tmp], capture_output=True, text=True)
+                if r.returncode == 0:
+                    os.replace(tmp, os.path.join(d, "timelapse_web.mp4"))
+            except Exception:
+                pass
+            finally:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                self._web_busy.discard(tid)
+        threading.Thread(target=run, daemon=True, name="tl-web").start()
 
     def render(self, tid):
         if "/" in tid or ".." in tid or not os.path.isdir(os.path.join(self.root, tid)):
@@ -233,6 +271,7 @@ class Timelapse:
         if r.returncode != 0:
             raise RuntimeError((r.stderr or "ffmpeg error").strip()[-200:])
         os.replace(tmp, out)
+        self._make_web(tid)          # light copy for the web link
         self.msg = f"Video ready: {tid}"
         if self.events:
             self.events.add("done", f"Timelapse ready ({tid})")

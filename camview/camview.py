@@ -748,6 +748,8 @@ class H(BaseHTTPRequestHandler):
         req = urllib.request.Request(APP + sub, data=data, method=method)
         if data is not None:
             req.add_header("Content-Type", "application/json")
+        if method == "GET" and self.headers.get("Range"):
+            req.add_header("Range", self.headers["Range"])     # lets videos start fast and seek
         if sub.startswith("/api/files/gcode3d") and "gzip" in (self.headers.get("Accept-Encoding") or ""):
             req.add_header("Accept-Encoding", "gzip")      # pass the gzipped toolpath straight through
         try:
@@ -758,7 +760,7 @@ class H(BaseHTTPRequestHandler):
             return self.json(502, {"ok": False, "error": "PrintWatch isn't answering"})
         try:
             self.send_response(r.status if hasattr(r, "status") else r.code)
-            for h in ("Content-Type", "Content-Disposition", "Content-Length", "Content-Encoding"):
+            for h in ("Content-Type", "Content-Disposition", "Content-Length", "Content-Encoding", "Accept-Ranges", "Content-Range"):
                 if r.headers.get(h):
                     self.send_header(h, r.headers[h])
             self.send_header("Cache-Control", "no-store")
