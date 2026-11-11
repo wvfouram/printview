@@ -11,7 +11,8 @@ log = logging.getLogger("store")
 
 
 class Settings:
-    DEFAULTS = {"auto_pause": True, "sensitivity": "medium", "notify_finish": True, "use_custom": True}
+    DEFAULTS = {"auto_pause": True, "sensitivity": "medium", "notify_finish": True, "use_custom": True,
+                "plate_check": True, "plate_pause": False}
 
     def __init__(self, path):
         self.path = path
@@ -27,7 +28,7 @@ class Settings:
 
     def update(self, changes: dict):
         for k, v in changes.items():
-            if k in ("auto_pause", "notify_finish", "use_custom"):
+            if k in ("auto_pause", "notify_finish", "use_custom", "plate_check", "plate_pause"):
                 self.data[k] = bool(v)
             elif k == "sensitivity" and v in ("low", "medium", "high"):
                 self.data[k] = v

@@ -37,7 +37,8 @@ public class ControlsActivity extends Activity {
     private JSONObject printer;
 
     private final Button[] speed = new Button[4];
-    private TextView speedNow, nozzleNow, bedNow, info, hms, motionLock, stepLabel;
+    private TextView speedNow, nozzleNow, bedNow, info, hms, motionLock, stepLabel, plateTxt;
+    private JSONObject plate;
     private final SeekBar[] fan = new SeekBar[3];
     private final TextView[] fanNow = new TextView[3];
     private static final String[] FAN_KEYS = {"part", "aux", "chamber"};
@@ -287,6 +288,37 @@ public class ControlsActivity extends Activity {
             });
         } });
         root.addView(cal);
+
+        // clear-plate check
+        LinearLayout pcard = Ui.card(c);
+        pcard.addView(Ui.heading(c, "Clear-plate check"));
+        plateTxt = Ui.text(c, "Runs when the next print starts.", 13, Ui.TEXT, false);
+        plateTxt.setPadding(0, Ui.dp(c, 8), 0, Ui.dp(c, 8));
+        pcard.addView(plateTxt);
+        LinearLayout pb = Ui.row(c);
+        String[][] pbs = {{"It was clear", "/api/plate/answer", "{\"clear\":true}"}, {"It wasn't", "/api/plate/answer", "{\"clear\":false}"},
+                {"Save clear plate", "/api/plate/clean_now", "{}"}};
+        for (int i = 0; i < pbs.length; i++) {
+            final String[] d = pbs[i];
+            Button bt = Ui.button(c, d[0], i == 2 ? Ui.ACCENT : Ui.SURFACE2, i == 2 ? Color.parseColor("#111111") : Ui.TEXT, 0);
+            bt.setTextSize(12);
+            bt.setMinHeight(Ui.dp(c, 38));
+            bt.setPadding(Ui.dp(c, 4), 0, Ui.dp(c, 4), 0);
+            LinearLayout.LayoutParams lp = Ui.weight(1);
+            if (i > 0) lp.leftMargin = Ui.dp(c, 6);
+            pb.addView(bt, lp);
+            bt.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+                net.execute(new Runnable() { public void run() {
+                    String m;
+                    try { Api.Resp r = Api.post(ControlsActivity.this, d[1], d[2]); m = r.code == 200 ? "Saved" : "Couldn't save: " + r.text(); }
+                    catch (Exception e) { m = "Couldn't save: " + e.getMessage(); }
+                    final String fm = m;
+                    ui.post(new Runnable() { public void run() { android.widget.Toast.makeText(ControlsActivity.this, fm, android.widget.Toast.LENGTH_SHORT).show(); } });
+                } });
+            } });
+        }
+        pcard.addView(pb);
+        root.addView(pcard);
 
         // info
         LinearLayout ic = Ui.card(c);
@@ -627,6 +659,7 @@ public class ControlsActivity extends Activity {
                         JSONObject all = new JSONObject(r.text());
                         p = all.optJSONObject("printer");
                         dev = all.optJSONObject("device");
+                        plate = all.optJSONObject("plate");
                     }
                 } catch (Exception ignored) { }
                 final JSONObject fp = p;
@@ -687,6 +720,22 @@ public class ControlsActivity extends Activity {
         calBtn.setEnabled(conn && !busy);
         calBtn.setAlpha(conn && !busy ? 1f : 0.4f);
 
+        if (plate != null && plateTxt != null) {
+            if (plate.has("t")) {
+                String when = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(new java.util.Date(plate.optLong("t") * 1000L));
+                StringBuilder pt = new StringBuilder("Last check " + when + ": ");
+                if (plate.optBoolean("ok")) pt.append("plate looked clear.");
+                else {
+                    pt.append("NOT CLEAR? ");
+                    JSONArray rs = plate.optJSONArray("reasons");
+                    for (int i = 0; rs != null && i < rs.length(); i++) pt.append(i > 0 ? "; " : "").append(rs.optString(i));
+                }
+                if (!plate.isNull("answered") && plate.has("answered")) pt.append("\nYou said: ").append(plate.optString("answered"));
+                pt.append("\n").append(plate.optInt("clean_examples")).append(" clear-plate examples saved");
+                plateTxt.setText(pt.toString());
+                plateTxt.setTextColor(plate.optBoolean("ok") ? Ui.TEXT : Ui.DANGER);
+            } else plateTxt.setText("Runs when the next print starts. " + plate.optInt("clean_examples") + " clear-plate examples saved.");
+        }
         StringBuilder sb = new StringBuilder();
         sb.append("State     ").append(conn ? p.optString("state") : "OFFLINE");
         if (!p.isNull("stage")) sb.append("\nStage     ").append(p.optString("stage"));

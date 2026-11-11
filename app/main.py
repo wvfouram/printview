@@ -29,6 +29,7 @@ from .printer import BambuPrinter
 from . import sdcard as sd
 from . import gcode3d
 from .devinfo import DevInfo
+from .platecheck import PlateCheck
 from . import remote as rm
 from .store import Events, Notifier, Settings
 from .trainer import Trainer
@@ -107,6 +108,7 @@ def build_app():
             app["events"].add("cmd", f"Scheduled print started: {os.path.basename(str(b.get('path')))}")
         return ok
     app["devinfo"] = DevInfo(printer)
+    app["plate"] = PlateCheck(printer, camera, detector, notifier, events, settings, data_dir)
     app["history"] = History(printer, camera, data_dir, app["timelapse"])
     threading.Thread(target=_weekly_report, args=(app, data_dir), daemon=True, name="report").start()
     app["schedule"] = Scheduler(printer, data_dir, _sched_start, events,
@@ -170,6 +172,9 @@ def build_app():
     app.router.add_get("/api/train", api_train_status)
     app.router.add_post("/api/train", api_train_now)
     app.router.add_post("/api/train/photo", api_train_photo)
+    app.router.add_get("/api/plate/photo.jpg", api_plate_photo)
+    app.router.add_post("/api/plate/answer", api_plate_answer)
+    app.router.add_post("/api/plate/clean_now", api_plate_clean_now)
     app.router.add_get("/api/prints", api_prints)
     app.router.add_get("/api/prints/{pid}", api_print)
     app.router.add_post("/api/prints/{pid}/label", api_label)
@@ -316,6 +321,7 @@ def full_status(app):
         "predict": app["predict"].status(),
         "schedule": {"next": app["schedule"].next_up()},
         "device": app["devinfo"].status(),
+        "plate": app["plate"].status(),
     }
 
 
@@ -484,6 +490,30 @@ async def api_train_now(request):
     request.app["trainer"].start_now()
     await asyncio.sleep(0.2)
     return web.json_response(request.app["trainer"].status())
+
+
+async def api_plate_photo(request):
+    p = request.app["plate"].photo()
+    if not p:
+        raise web.HTTPNotFound()
+    return web.FileResponse(p, headers={"Cache-Control": "no-store"})
+
+
+async def api_plate_answer(request):
+    b = await request.json()
+    try:
+        r = await _run(request.app["plate"].answer, bool(b.get("clear")))
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "result": r})
+
+
+async def api_plate_clean_now(request):
+    try:
+        n = await _run(request.app["plate"].save_now_clean)
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "clean_examples": n})
 
 
 async def api_train_photo(request):

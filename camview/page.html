@@ -776,6 +776,13 @@ VIEWS.controls = {
       <label class="ck"><input type="checkbox" id="cbBed" checked>Bed leveling</label><label class="ck"><input type="checkbox" id="cbVib" checked>Vibration compensation</label>
       <label class="ck"><input type="checkbox" id="cbMot">Motor noise cancellation</label>
       <button class="btn sm pri" id="cCal" style="margin-top:8px">Start calibration</button></div>
+    <div class="card"><div class="row"><div class="h grow" style="margin:0">Clear-plate check</div><span class="chip" id="pcChip">-</span></div>
+      <div class="mu sm" style="margin:8px 0 10px">When a print starts, the Pi looks at the bed and sends a phone notification if something may still be on it. It learns your clear plate from the examples below.</div>
+      <div class="row" style="align-items:flex-start;gap:12px"><img id="pcImg" alt="" style="width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:var(--s2)">
+        <div class="grow sm" id="pcTxt" style="line-height:1.6"></div></div>
+      <div class="row w" style="margin-top:10px;gap:6px"><button class="btn sm" id="pcYes">It was clear</button><button class="btn sm" id="pcNo">It wasn't clear</button><button class="btn sm pri" id="pcNow">Plate is clear now, save it</button></div>
+      <div class="row" style="margin-top:12px"><span class="grow">Check the plate when a print starts</span><label class="sw"><input type="checkbox" id="pcOn"><span></span></label></div>
+      <div class="row" style="margin-top:8px"><span class="grow">Also pause the print if it's not clear</span><label class="sw"><input type="checkbox" id="pcPause"><span></span></label></div></div>
     <div class="card"><div class="h">Printer info</div><div id="cInfo" class="sm" style="line-height:1.8"></div></div>
     <div class="card"><div class="h">Firmware and serial numbers</div><div id="cDev"></div></div>`;
     el.querySelectorAll("#cSpeed button").forEach(b => b.onclick = () => { paintSeg("#cSpeed", b.dataset.v); cmd("speed", {level: +b.dataset.v}, "Speed: " + b.textContent); });
@@ -840,6 +847,26 @@ VIEWS.controls = {
     document.querySelectorAll("[data-jog],#cMotors,[data-ex]").forEach(b => b.disabled = !!p.busy);
     $("#cCal").disabled = !!p.busy;
     const hms = p.hms || [];
+    const pc = (status && status.plate) || {};
+    if ($("#pcChip")) {
+      if (!$("#pcYes").onclick) {
+        $("#pcYes").onclick = async () => { try { await api("/api/plate/answer", {clear: true}); toast("Thanks, saved as a clear plate"); } catch (e) { toast(e.message); } };
+        $("#pcNo").onclick = async () => { try { await api("/api/plate/answer", {clear: false}); toast("Noted"); } catch (e) { toast(e.message); } };
+        $("#pcNow").onclick = async () => { try { const j = await api("/api/plate/clean_now", {}); toast("Saved (" + j.clean_examples + " clear-plate examples)"); } catch (e) { toast(e.message); } };
+        $("#pcOn").onchange = e => setting({plate_check: e.target.checked}, e.target.checked ? "Plate check on" : "Plate check off");
+        $("#pcPause").onchange = e => setting({plate_pause: e.target.checked}, e.target.checked ? "Will pause if the plate isn't clear" : "Notify only");
+      }
+      if (document.activeElement !== $("#pcOn")) $("#pcOn").checked = pc.enabled !== false;
+      if (document.activeElement !== $("#pcPause")) $("#pcPause").checked = !!pc.pause;
+      const has = !!pc.t;
+      $("#pcChip").textContent = !has ? "No check yet" : pc.ok ? "Looked clear" : "Not clear?";
+      $("#pcChip").style.color = !has ? "var(--mu)" : pc.ok ? "var(--ok)" : "var(--bad)";
+      if (has && $("#pcImg").dataset.t !== String(pc.t)) { $("#pcImg").dataset.t = pc.t; $("#pcImg").src = BASE + "/api/plate/photo.jpg?t=" + pc.t; }
+      $("#pcTxt").innerHTML = (has ? `Last check: ${esc(new Date(pc.t * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}))}${pc.job ? " · " + esc(pc.job) : ""}<br>`
+        + (pc.ok ? "Nothing found on the plate." : esc((pc.reasons || []).join("; ")) + ".") + (pc.answered ? `<br>You said: ${esc(pc.answered)}` : "") : "Runs at the start of the next print.")
+        + `<br><span class="fa">${pc.clean_examples || 0} clear-plate examples${(pc.clean_examples || 0) < 2 ? " (needs 2 to compare; the 'same as last print' check works already)" : ""}</span>`;
+      $("#pcYes").disabled = $("#pcNo").disabled = !has;
+    }
     const dv = (status && status.device) || {};
     const spools = b => { const n = parseInt(b || "0", 16); if (isNaN(n)) return "-"; const l = []; for (let i = 0; i < 16; i++) if (n & (1 << i)) l.push(`${(i >> 2) + 1}·${(i & 3) + 1}`); return l.join(", ") || "none"; };
     const err = p.print_error ? (p.print_error >>> 0).toString(16).toUpperCase().padStart(8, "0") : "";
