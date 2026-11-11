@@ -117,7 +117,7 @@ public class TimelapseActivity extends Base {
         TextView nm = Ui.text(c, t.optString("name"), 13, Ui.TEXT, true);
         nm.setSingleLine(true);
         info.addView(nm);
-        boolean noVid = t.has("pi") && !t.optBoolean("video");
+        boolean noVid = t.has("pi") && (!t.optBoolean("video") || !t.optString("state").isEmpty());
         String sub = noVid ? (t.optString("state").isEmpty() ? "Tap to make the video" : t.optString("state")) + " · " + t.optString("date")
                 : size(t.optLong("size")) + " · " + t.optString("date");
         TextView s = Ui.text(c, sub, 12, noVid && t.optString("state").isEmpty() ? Ui.ACCENT : Ui.MUTED, false);
@@ -126,7 +126,7 @@ public class TimelapseActivity extends Base {
         r.addView(info, Ui.weight(1));
         r.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                if (t.has("pi") && !t.optBoolean("video")) {
+                if (t.has("pi") && (!t.optBoolean("video") || !t.optString("state").isEmpty())) {
                     if (!t.optString("state").isEmpty()) return;
                     post("/api/timelapse/" + q(t.optString("pi")) + "/render", "{}", new Done<JSONObject>() {
                         public void run(JSONObject r, String e) { toast(e != null ? e : "Making the video..."); loadPi(); }
