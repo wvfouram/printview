@@ -345,7 +345,7 @@ function bedServo(b) { window._bc = b;
 
 // ------------------------------------------------------------ tabs
 const VIEWS = {};
-const TABS = [["watch", "Watch"], ["controls", "Controls"], ["ams", "AMS"], ["print", "Print from SD"], ["job", "Current job"], ["timelapses", "Timelapses"], ["train", "Train"]];
+const TABS = [["watch", "Watch"], ["controls", "Controls"], ["ams", "AMS"], ["print", "Print from SD"], ["job", "Current job"], ["timelapses", "Timelapses"], ["history", "History"], ["train", "Train"]];
 const RO_TABS = [["watch", "Watch"], ["controls", "Settings"], ["ams", "AMS"], ["job", "Current job"]];
 function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Command center"]]) : TABS; }
 function renderTabs() {
@@ -651,19 +651,7 @@ VIEWS.ams = {
       <div class="card ro-hide"><div class="h">Actions</div>
         <div class="row w"><button class="btn sm" id="aUnload">Unload</button><button class="btn sm" id="aExt">Load external spool</button><button class="btn sm" id="aRetry">Retry after AMS error</button></div>
         </div>
-      <div class="card ro-hide"><div class="h">Drying (AMS HT / AMS 2 Pro, printer idle)</div>
-        <div class="row w" style="gap:10px;align-items:flex-end">
-          <label class="mu sm">AMS<br><input id="dUnit" type="number" value="129" style="width:80px"></label>
-          <label class="mu sm">Filament<br><select id="dFil">${["PLA","PETG","ABS","ASA","TPU","PA","PC","PVA"].map(x => `<option>${x}</option>`).join("")}</select></label>
-          <label class="mu sm">Temp (°C)<br><input id="dTemp" type="number" min="30" max="85" value="55" style="width:80px"></label>
-          <label class="mu sm">Hours<br><input id="dHrs" type="number" min="1" max="24" value="4" style="width:80px"></label>
-          <label class="ck"><input type="checkbox" id="dRot" checked>Rotate spools</label>
-        </div>
-        <div class="row w" style="margin-top:10px"><button class="btn sm" id="dStart">Start drying</button><button class="btn sm bad" id="dStop">Stop drying</button></div>
-        <div class="mu sm" style="margin-top:8px">Rotating needs the filament pulled out of the feeders. Time left shows on the AMS card above.</div></div>`;
-    const dry = on => cmd("ams_dry", {unit: +$("#dUnit").value, on, filament: $("#dFil").value, temp: +$("#dTemp").value, hours: +$("#dHrs").value, rotate: $("#dRot").checked}, on ? "Drying started" : "Drying stopped");
-    $("#dStart").onclick = () => dry(true);
-    $("#dStop").onclick = () => dry(false);
+`;
     $("#aUnload").onclick = () => confirmBox("Unload filament?", "The printer will cut and pull back the current filament.", "Unload", () => cmd("ams_unload", null, "Unloading..."));
     $("#aExt").onclick = () => cmd("ams_load", {tray: 254}, "Loading external spool...");
     $("#aRetry").onclick = () => cmd("ams_resume", null, "Retrying AMS...");
@@ -707,6 +695,7 @@ VIEWS.print = {
     el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm" id="pRef">Refresh</button></div>
       <div class="mu sm" id="pUpMsg" style="margin-top:6px"></div>
       <div class="list" id="pList" style="margin-top:10px"><div class="mu">Loading...</div></div>
+      <div id="pSchedList" style="margin-top:12px"></div>
       <details style="margin-top:12px"><summary class="mu sm" style="cursor:pointer">Recently deleted (kept on the Pi)</summary><div class="list" id="pTrash" style="margin-top:8px"></div></details></div><div id="pDetail"></div>`;
     $("#pRef").onclick = () => this.load(true);
     $("#pUp").onclick = () => pwUpload(BASE + "/api/upload", {"X-PW": "1"}, () => this.load(true), $("#pUpMsg"));
@@ -731,6 +720,11 @@ VIEWS.print = {
         }, true);
       });
     } catch (e) { $("#pList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+    try {
+      const sj = ((await api("/api/schedule")).items || []).filter(x => x.status === "waiting" || Date.now() / 1000 - (x.done || x.at) < 86400);
+      $("#pSchedList").innerHTML = sj.length ? '<div class="h" style="font-size:14px">Scheduled</div>' + sj.map(x => `<div class="row" style="margin:6px 0"><div class="grow"><b>${esc(x.name)}</b><div class="fa sm">${new Date(x.at * 1000).toLocaleString([], {weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})} · ${esc(x.status)}${x.msg ? " · " + esc(x.msg) : ""}</div></div>${x.status === "waiting" ? `<button class="btn sm bad" data-cx="${x.id}">Cancel</button>` : ""}</div>`).join("") : "";
+      $("#pSchedList").querySelectorAll("[data-cx]").forEach(b => b.onclick = async () => { try { await api("/api/schedule/" + b.dataset.cx + "/cancel", {}); toast("Cancelled"); this.load(false); } catch (err) { toast(err.message); } });
+    } catch (e) {}
     try {
       const t = (await api("/api/trash")).items || [];
       $("#pTrash").innerHTML = t.length ? t.map((x, i) => `<div><div class="grow"><div style="font-weight:600">${esc(x.name)}</div><div class="fa sm">deleted ${esc(x.deleted.replace(/(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d).*/, "$1-$2-$3 $4:$5"))} · ${(x.size / 1e6).toFixed(1)} MB</div></div><button class="btn sm" data-res="${i}">Restore</button></div>`).join("") : '<div class="mu sm">Nothing deleted yet.</div>';
@@ -770,10 +764,27 @@ VIEWS.print = {
           <div class="div"></div>
           <label class="ck"><input type="checkbox" id="oLvl" checked>Bed leveling</label>
           <label class="ck"><input type="checkbox" id="oVib" checked>Vibration calibration</label><label class="ck"><input type="checkbox" id="oTl">Timelapse</label>
-          <button class="btn pri" id="pStart" style="width:100%;margin-top:12px">Start print</button></div>`;
+          <button class="btn pri" id="pStart" style="width:100%;margin-top:12px">Start print</button>
+          <div class="row" style="margin-top:10px;gap:8px"><input type="datetime-local" id="pAt" class="grow"><button class="btn" id="pSched">Schedule</button></div>
+          <div class="mu sm" style="margin-top:4px">Scheduled prints start at that time if the printer is idle (waits up to 1 hour if it's busy). Clear the plate first.</div></div>`;
         if (plates.length > 1) { paintSeg("#pPl", plate.index); box.querySelectorAll("#pPl button").forEach(b => b.onclick = () => { plate = plates.find(p => p.index === +b.dataset.v); draw(); }); }
         fil.forEach(fl => { box.querySelector(`[data-fid="${fl.id}"]`).value = best(fl); });
         $("#pStart").disabled = !status || status.printer.busy;
+        const mkBody = () => {
+          const map = fil.map(fl => [fl.id, +box.querySelector(`[data-fid="${fl.id}"]`).value]);
+          const useExt = map.some(m => m[1] === 254);
+          const arr = new Array(Math.max(1, ...map.map(m => m[0]))).fill(-1);
+          map.forEach(([id, slot]) => arr[id - 1] = slot);
+          return {path: f.path, plate: plate.index, use_ams: !useExt, ams_mapping: useExt ? [] : arr, timelapse: $("#oTl").checked,
+            bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked};
+        };
+        $("#pSched").onclick = () => {
+          const v = $("#pAt").value; if (!v) return toast("Pick a date and time first");
+          const at = new Date(v).getTime() / 1000;
+          confirmBox("Schedule this print?", f.title + "\nStarts " + new Date(at * 1000).toLocaleString([], {weekday: "short", hour: "numeric", minute: "2-digit"}), "Schedule", async () => {
+            try { await api("/api/schedule", Object.assign(mkBody(), {at})); toast("Scheduled"); VIEWS.print.load(false); } catch (e) { toast(e.message); }
+          });
+        };
         $("#pStart").onclick = () => {
           const map = fil.map(fl => [fl.id, +box.querySelector(`[data-fid="${fl.id}"]`).value]);
           const useExt = map.some(m => m[1] === 254);
@@ -795,6 +806,27 @@ function colorDist(a, b) {
   const x = h(a), y = h(b); if (!x || !y) return 500;
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 }
+
+// ---------- Print history (final photo of every print) + weekly report
+VIEWS.history = {
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Last 7 days</div><button class="btn sm" id="hSend">Send to phone</button></div><div id="hRep" class="mu sm" style="margin-top:8px">Loading...</div></div>
+      <div class="card"><div class="h">Print history</div><div id="hList"><div class="mu">Loading...</div></div></div>`;
+    $("#hSend").onclick = async () => { try { await api("/api/report/send", {}); toast("Report sent"); } catch (e) { toast(e.message); } };
+    this.load();
+  },
+  async load() {
+    try { const r = await api("/api/report"); $("#hRep").innerHTML = r.lines.map(esc).join("<br>"); } catch (e) { $("#hRep").textContent = e.message; }
+    try {
+      const it = (await api("/api/history")).items || [];
+      $("#hList").innerHTML = it.length ? it.map(x => `<div class="row" style="gap:12px;margin:10px 0;align-items:flex-start">
+        ${x.photo ? `<img src="${BASE}/api/history/photo/${x.photo}" loading="lazy" style="width:120px;border-radius:10px">` : '<div style="width:120px;height:68px;border-radius:10px;background:var(--s2)"></div>'}
+        <div class="grow"><b>${esc(x.job)}</b><div class="fa sm">${new Date(x.end * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})} · ${mins(x.minutes)}${x.layers ? " · " + x.layers + " layers" : ""}</div>
+        <div class="sm" style="color:${x.result === "done" ? "var(--ok)" : "var(--bad)"}">${x.result === "done" ? "Finished" : "Failed / stopped"}</div>
+        ${x.timelapse ? `<a class="btn sm" style="margin-top:6px" href="${BASE}/api/timelapse/${x.timelapse}/timelapse.mp4" target="_blank">Timelapse</a>` : ""}</div></div>`).join("") : '<div class="mu">Prints show up here when they finish.</div>';
+    } catch (e) { $("#hList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
 
 // ---------- Current job / skip objects
 VIEWS.job = {

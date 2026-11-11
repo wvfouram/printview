@@ -17,6 +17,8 @@ from aiohttp import web
 from .timelapse import Timelapse
 from .hms import HMS
 from .predict import Predictor
+from .scheduler import Scheduler
+from .history import History
 from .bedctl import BedControl
 from .streams import STREAMS
 from .camera import BambuCamera
@@ -92,9 +94,19 @@ def build_app():
     app["upnp"] = rm.UPnP(app["remote_port"]) if app["remote_port"] and env("UPNP", "on") != "off" else None
     if app["remote_port"]:
         app["cert"] = rm.ensure_cert(data_dir)
+    app["timelapse"] = Timelapse(camera, printer, data_dir, events)
     app["hms"] = HMS(data_dir)
     app["predict"] = Predictor(printer, data_dir)
-    app["timelapse"] = Timelapse(camera, printer, data_dir, events)
+
+    def _sched_start(b):
+        ok = _start_from_body(app, b)
+        if ok:
+            app["events"].add("cmd", f"Scheduled print started: {os.path.basename(str(b.get('path')))}")
+        return ok
+    app["history"] = History(printer, camera, data_dir, app["timelapse"])
+    threading.Thread(target=_weekly_report, args=(app, data_dir), daemon=True, name="report").start()
+    app["schedule"] = Scheduler(printer, data_dir, _sched_start, events,
+                                lambda t, m: notifier.send(t, m, tags="alarm_clock"))
     app["bedctl"] = BedControl(printer, env("BED_PORT", "/dev/ttyACM0"), data_dir, env("BED_CONTROL", "on") != "off")
     app["camera"], app["printer"], app["settings"] = camera, printer, settings
     app["events"], app["notifier"], app["detector"] = events, notifier, detector
@@ -129,6 +141,13 @@ def build_app():
     app.router.add_get("/api/files/info", api_file_info)
     app.router.add_get("/api/files/plate.png", api_file_plate)
     app.router.add_post("/api/print", api_print_start)
+    app.router.add_get("/api/schedule", api_schedule)
+    app.router.add_get("/api/history", api_history)
+    app.router.add_get("/api/history/photo/{name}", api_history_photo)
+    app.router.add_get("/api/report", api_report)
+    app.router.add_post("/api/report/send", api_report_send)
+    app.router.add_post("/api/schedule", api_schedule_add)
+    app.router.add_post("/api/schedule/{jid}/cancel", api_schedule_cancel)
     app.router.add_get("/api/job", api_job)
     app.router.add_get("/api/job/plate.png", api_job_plate)
     app.router.add_get("/api/timelapses", api_timelapses)
@@ -288,6 +307,7 @@ def full_status(app):
         "timelapse": app["timelapse"].status(),
         "hms": app["hms"].status(app["printer"]),
         "predict": app["predict"].status(),
+        "schedule": {"next": app["schedule"].next_up()},
     }
 
 
@@ -744,6 +764,91 @@ async def api_file_plate(request):
     if not png:
         raise web.HTTPNotFound()
     return web.Response(body=png, content_type="image/png", headers={"Cache-Control": "max-age=3600"})
+
+
+STARTED_AT = time.time()
+
+
+def build_report(app, days=7):
+    h = app["history"].stats(time.time() - days * 86400)
+    bc = app["bedctl"].status() or {}
+    tl = app["timelapse"].status()
+    us = (bc.get("uno_status") or {})
+    lines = [
+        f"Prints: {h['prints']} ({h['done']} done, {h['failed']} failed), {h['hours']} h printing",
+        f"Bed controller: {'FAULT: ' + str(bc.get('fault')) if bc.get('fault') else 'OK'}, Uno glitches {us.get('X', '?')}",
+        f"Disk: {tl.get('free_gb')} GB free",
+        f"PrintView up {round((time.time() - STARTED_AT) / 86400, 1)} days, printer {'online' if app['printer'].status().get('connected') else 'OFFLINE'}",
+    ]
+    return {"days": days, "lines": lines, "stats": h}
+
+
+def _weekly_report(app, data_dir):
+    mark = os.path.join(data_dir, "report_last.txt")
+    while True:
+        time.sleep(600)
+        try:
+            lt = time.localtime()
+            last = float(open(mark).read()) if os.path.exists(mark) else 0
+            if lt.tm_wday == 6 and lt.tm_hour >= 18 and time.time() - last > 5 * 86400:   # Sundays 6 PM
+                r = build_report(app)
+                app["notifier"].send("Weekly PrintView report", "\n".join(r["lines"]), tags="bar_chart")
+                with open(mark, "w") as f:
+                    f.write(str(time.time()))
+        except Exception:  # noqa: BLE001
+            log.exception("weekly report failed")
+
+
+async def api_report(request):
+    return web.json_response(build_report(request.app, int(request.query.get("days", 7))))
+
+
+async def api_report_send(request):
+    if not request.app["notifier"].enabled:
+        return web.json_response({"ok": False, "error": "Phone notifications aren't set up (NTFY_URL)"}, status=409)
+    r = build_report(request.app)
+    request.app["notifier"].send("PrintView report", "\n".join(r["lines"]), tags="bar_chart")
+    return web.json_response({"ok": True})
+
+
+async def api_history(request):
+    return web.json_response({"items": request.app["history"].list()})
+
+
+async def api_history_photo(request):
+    p = request.app["history"].photo_path(request.match_info["name"])
+    if not p:
+        raise web.HTTPNotFound()
+    return web.FileResponse(p, headers={"Content-Type": "image/jpeg", "Cache-Control": "max-age=86400"})
+
+
+def _start_from_body(app, b):
+    ok = app["printer"].start_print(str(b.get("path", "")), int(b.get("plate", 1)), b.get("ams_mapping") or [],
+                                    bool(b.get("use_ams", True)), bool(b.get("timelapse", False)),
+                                    bool(b.get("bed_leveling", True)), bool(b.get("flow_cali", False)),
+                                    bool(b.get("vibration_cali", True)))
+    if ok:
+        app["job_hint"].update(path=b.get("path"), plate=int(b.get("plate", 1)), t=time.time())
+    return ok
+
+
+async def api_schedule(request):
+    return web.json_response({"items": request.app["schedule"].list()})
+
+
+async def api_schedule_add(request):
+    b = await request.json()
+    at = b.pop("at", None)
+    try:
+        job = request.app["schedule"].add(b, at)
+    except (ValueError, TypeError) as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "job": job})
+
+
+async def api_schedule_cancel(request):
+    ok = request.app["schedule"].cancel(request.match_info["jid"])
+    return web.json_response({"ok": ok, "error": None if ok else "not waiting"}, status=200 if ok else 404)
 
 
 async def api_print_start(request):

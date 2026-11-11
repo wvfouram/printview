@@ -87,6 +87,10 @@ class Notifier:
 
     def _send(self, title, message, priority, tags, image):
         headers = {"Title": title, "Priority": priority}
+        open_url = (os.environ.get("OPEN_URL") or "").strip()
+        if open_url:
+            headers["Actions"] = f"view, Open PrintView, {open_url}"
+            headers["Click"] = open_url
         if tags:
             headers["Tags"] = tags
         if self.token:

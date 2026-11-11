@@ -289,13 +289,14 @@ public class MainActivity extends Activity {
         stl.topMargin = Ui.dp(c, 10);
         root.addView(strTile, stl);
 
-        View dryTile = tile("AMS drying", "Dry filament in the AMS HT while idle", "layers");
-        dryTile.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { startActivity(new Intent(MainActivity.this, DryActivity.class)); }
+        View hisTile = tile("Print history", "Every print with its final photo, weekly summary", "layers");
+        hisTile.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { startActivity(new Intent(MainActivity.this, HistoryActivity.class)); }
         });
-        LinearLayout.LayoutParams dyl = new LinearLayout.LayoutParams(-1, -2);
-        dyl.topMargin = Ui.dp(c, 10);
-        root.addView(dryTile, dyl);
+        LinearLayout.LayoutParams hil = new LinearLayout.LayoutParams(-1, -2);
+        hil.topMargin = Ui.dp(c, 10);
+        root.addView(hisTile, hil);
+
 
         View vfxTile = tile("Video settings", "Colors, greyscale, invert, flip, zoom", "layers");
         vfxTile.setOnClickListener(new View.OnClickListener() {

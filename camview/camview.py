@@ -564,6 +564,15 @@ class H(BaseHTTPRequestHandler):
             return self.admin(method, sub, s)
         if s["role"] != "master" and _state["frozen"]:
             return self.json(423, {"ok": False, "error": "Controls are frozen by the owner"})
+        if method == "POST" and sub == "/api/cmd" and s["role"] != "master":
+            data = self.body()
+            try:
+                act = json.loads(data or b"{}").get("action")
+            except ValueError:
+                act = None
+            if act == "gcode":
+                return self.json(403, {"ok": False, "error": "Raw G-code needs the master code"})
+            return self.proxy(method, sub, data)
         if method == "POST" and sub == "/api/upload":
             return self.upload_proxy(query)
         if sub.startswith("/api/") and not sub.startswith(BLOCKED):
@@ -710,8 +719,9 @@ class H(BaseHTTPRequestHandler):
         finally:
             c.close()
 
-    def proxy(self, method, sub):
-        data = self.body() if method == "POST" else None
+    def proxy(self, method, sub, data=None):
+        if data is None and method == "POST":
+            data = self.body()
         req = urllib.request.Request(APP + sub, data=data, method=method)
         if data is not None:
             req.add_header("Content-Type", "application/json")

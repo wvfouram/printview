@@ -107,6 +107,11 @@ public class StartActivity extends Base {
         gl.topMargin = Ui.dp(c, 14);
         p.addView(go, gl);
         go.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { start(); } });
+        Button sch = Ui.button(c, "Schedule for later", Ui.SURFACE2, Ui.TEXT, Ui.LINE);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2);
+        sl.topMargin = Ui.dp(c, 8);
+        p.addView(sch, sl);
+        sch.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { pickTime(); } });
         note(p, "Check the build plate is clear before starting.");
     }
 
@@ -275,6 +280,57 @@ public class StartActivity extends Base {
                         paintMapping();
                     }
                 }).show();
+    }
+
+    private void pickTime() {
+        if (plate == null) return;
+        final java.util.Calendar cal = java.util.Calendar.getInstance();
+        new android.app.DatePickerDialog(this, android.R.style.Theme_Material_Dialog_Alert, new android.app.DatePickerDialog.OnDateSetListener() {
+            public void onDateSet(android.widget.DatePicker d, int y, int m, int day) {
+                cal.set(y, m, day);
+                new android.app.TimePickerDialog(StartActivity.this, android.R.style.Theme_Material_Dialog_Alert, new android.app.TimePickerDialog.OnTimeSetListener() {
+                    public void onTimeSet(android.widget.TimePicker t, int h, int min) {
+                        cal.set(java.util.Calendar.HOUR_OF_DAY, h);
+                        cal.set(java.util.Calendar.MINUTE, min);
+                        cal.set(java.util.Calendar.SECOND, 0);
+                        schedule(cal.getTimeInMillis() / 1000L);
+                    }
+                }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), android.text.format.DateFormat.is24HourFormat(StartActivity.this)).show();
+            }
+        }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH)).show();
+    }
+
+    private void schedule(final long at) {
+        final String json = body().replaceFirst("\\}$", ",\"at\":" + at + "}");
+        String when = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(new java.util.Date(at * 1000L));
+        confirm("Schedule this print?", getIntent().getStringExtra("title") + "\nStarts " + when + "\nClear the plate before then.", "Schedule",
+                new Runnable() {
+                    public void run() {
+                        post("/api/schedule", json, new Done<JSONObject>() {
+                            public void run(JSONObject v, String e) {
+                                toast(e == null ? "Scheduled" : e);
+                                if (e == null) finish();
+                            }
+                        });
+                    }
+                });
+    }
+
+    private String body() {
+        int maxId = 0;
+        for (int[] m : mapping) maxId = Math.max(maxId, m[0]);
+        int[] arr = new int[Math.max(1, maxId)];
+        for (int i = 0; i < arr.length; i++) arr[i] = -1;
+        boolean ext = false;
+        for (int[] m : mapping) { arr[m[0] - 1] = m[1]; if (m[1] == 254) ext = true; }
+        boolean ams = useAms.isChecked() && !ext;
+        StringBuilder am = new StringBuilder("[");
+        for (int i = 0; i < arr.length; i++) am.append(i > 0 ? "," : "").append(arr[i]);
+        am.append("]");
+        return "{\"path\":" + JSONObject.quote(path) + ",\"plate\":" + plate.optInt("index")
+                + ",\"use_ams\":" + ams + ",\"ams_mapping\":" + (ams ? am.toString() : "[]")
+                + ",\"timelapse\":" + timelapse.isChecked() + ",\"bed_leveling\":" + level.isChecked()
+                + ",\"flow_cali\":false,\"vibration_cali\":" + vib.isChecked() + "}";
     }
 
     private void start() {
