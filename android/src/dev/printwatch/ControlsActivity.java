@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
 
 /** Every printer control the P1S accepts over LAN MQTT. Movement is locked while printing. */
 public class ControlsActivity extends Activity {
+    private CamPip pip;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService net = Executors.newFixedThreadPool(2);
     private boolean running, busyCmd;
@@ -65,12 +66,14 @@ public class ControlsActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        pip = CamPip.show(this);
         running = true;
         poll();
     }
 
     @Override
     protected void onPause() {
+        if (pip != null) { pip.hide(); pip = null; }
         super.onPause();
         running = false;
     }

@@ -23,6 +23,7 @@ import java.util.List;
 
 /** Pick plate, map filaments to AMS slots, choose options, start the print. */
 public class StartActivity extends Base {
+    @Override boolean showCamera() { return false; }   // preparing a print: keep the screen clear
     private String path;
     private JSONArray plates;
     private JSONObject plate;

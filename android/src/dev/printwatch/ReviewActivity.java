@@ -32,6 +32,9 @@ import java.util.concurrent.Executors;
 
 /** Scrub through one recorded print and label it. */
 public class ReviewActivity extends Activity {
+    @Override protected void onPause() { if (pip != null) { pip.hide(); pip = null; } super.onPause(); }
+    @Override protected void onResume() { super.onResume(); pip = CamPip.show(this); }
+    private CamPip pip;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService net = Executors.newSingleThreadExecutor();
     private String id;

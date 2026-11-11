@@ -30,6 +30,8 @@ import java.util.concurrent.Executors;
 
 /** Model stats + list of recorded prints to label. */
 public class TrainActivity extends Activity {
+    @Override protected void onPause() { if (pip != null) { pip.hide(); pip = null; } super.onPause(); }
+    private CamPip pip;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService net = Executors.newFixedThreadPool(3);
     private LinearLayout list;
@@ -53,6 +55,7 @@ public class TrainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        pip = CamPip.show(this);
         loadModel();
         loadPrints();
     }

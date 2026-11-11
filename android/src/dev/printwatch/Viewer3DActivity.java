@@ -21,6 +21,7 @@ import java.util.Map;
 /** Full-screen 3D toolpath of one plate. The viewer is the same code as the web link (assets/viewer3d.html);
  *  its data request is answered here through the app's normal (pinned, paired) connection. */
 public class Viewer3DActivity extends Base {
+    @Override boolean showCamera() { return false; }   // preparing a print: keep the screen clear
     static final String ORIGIN = "https://printview.local/";
 
     @Override

@@ -29,6 +29,22 @@ abstract class Base extends Activity {
     final Handler ui = new Handler(Looper.getMainLooper());
     final ExecutorService net = Executors.newFixedThreadPool(3);
     LinearLayout root;
+    private CamPip pip;
+
+    /** Screens where the floating camera would be in the way say no. */
+    boolean showCamera() { return true; }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (showCamera()) pip = CamPip.show(this);
+    }
+
+    @Override
+    protected void onPause() {
+        if (pip != null) { pip.hide(); pip = null; }
+        super.onPause();
+    }
 
     interface Done<T> { void run(T value, String error); }
 
