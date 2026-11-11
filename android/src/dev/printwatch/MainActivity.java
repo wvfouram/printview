@@ -289,6 +289,14 @@ public class MainActivity extends Activity {
         stl.topMargin = Ui.dp(c, 10);
         root.addView(strTile, stl);
 
+        View schTile = tile("Scheduled prints", "What's set to start later, with countdowns", "layers");
+        schTile.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { startActivity(new Intent(MainActivity.this, ScheduleActivity.class)); }
+        });
+        LinearLayout.LayoutParams scl = new LinearLayout.LayoutParams(-1, -2);
+        scl.topMargin = Ui.dp(c, 10);
+        root.addView(schTile, scl);
+
         View hisTile = tile("Print history", "Every print with its final photo, weekly summary", "layers");
         hisTile.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { startActivity(new Intent(MainActivity.this, HistoryActivity.class)); }
