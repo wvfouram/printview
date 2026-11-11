@@ -52,6 +52,8 @@ class DevInfo:
                 label = "AMS HT" if n.startswith("n3s/") else "AMS 2 Pro"
             else:
                 label = NAMES.get(n, n)
+            if m.get("product_name"):
+                label = str(m["product_name"]).replace("Bambu Lab ", "")   # e.g. "P1S", "AMS (1)", "AMS HT (1)"
             out.append({"name": label, "id": n, "sw": m.get("sw_ver") or "", "hw": m.get("hw_ver") or "",
                         "sn": m.get("sn") or ""})
         self.modules, self.got = out, time.time()
@@ -89,7 +91,7 @@ class DevInfo:
         except (TypeError, ValueError):
             now = tar = 255
         if main == 1 and tar not in (255, 254) and tar != now:
-            ams += f" → AMS {tar // 4 + 1} slot {tar % 4 + 1}"
+            ams += " → AMS HT" if tar >= 128 else f" → AMS {tar // 4 + 1} slot {tar % 4 + 1}"
         elif main == 1 and tar == 255 and now != 255:
             ams += " (unloading)"
         try:
