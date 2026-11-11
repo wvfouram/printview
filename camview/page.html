@@ -1276,7 +1276,7 @@ VIEWS.timelapses = {
           : `<button class="btn sm pri" data-mk="${esc(x.id)}">Make video</button>`;
         return `<div><img class="thumb" loading="lazy" src="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/thumb.jpg" onerror="this.style.visibility='hidden'">
           <div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}</div>
-          <div class="fa sm">${when} · ${x.frames} layers${x.mb ? " · " + x.mb + " MB" : ""}</div></div>${btn}</div>`; }).join("")
+          <div class="fa sm">${when} · ${x.frames} layers${x.mb ? " · " + x.mb + " MB" : ""}</div></div><div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;flex:none;max-width:60%">${btn.replace(/ style="margin-right:6px"/g, "")}</div></div>`; }).join("")
         : '<div class="mu">None yet. The Pi records one frame per layer of every print.</div>';
       $("#tPi").querySelectorAll("[data-mk]").forEach(b => b.onclick = async () => { try { await api("/api/timelapse/" + encodeURIComponent(b.dataset.mk) + "/render", {}); toast("Making the video..."); this.loadPi(); } catch (e) { toast(e.message); } });
       if (busy && tab === "timelapses") this.piT = setTimeout(() => this.loadPi(), 4000);
