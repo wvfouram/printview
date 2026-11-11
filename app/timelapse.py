@@ -76,6 +76,8 @@ class Timelapse:
             out.append({"id": name, "job": meta.get("job", ""), "frames": meta.get("frames", 0),
                         "video": os.path.exists(vid),
                         "mb": round(os.path.getsize(vid) / 1e6, 1) if os.path.exists(vid) else None,
+                        "bytes": os.path.getsize(vid) if os.path.exists(vid) else None,
+                        "t": meta.get("t") or int(os.path.getmtime(d)),
                         "rendering": self.rendering == name, "queued": name in self.render_q})
         return out
 
@@ -84,6 +86,16 @@ class Timelapse:
         return {"ready": free >= MIN_FREE_GB, "free_gb": round(free, 1), "need_gb": MIN_FREE_GB,
                 "recording": self.job_dir is not None, "frames": self.count, "layer": self.layer,
                 "rendering": self.rendering, "msg": self.msg}
+
+    def thumb_path(self, tid):
+        if "/" in tid or ".." in tid:
+            return None
+        fr = os.path.join(self.root, tid, "frames")
+        try:
+            names = sorted(n for n in os.listdir(fr) if n.endswith(".jpg"))
+        except OSError:
+            return None
+        return os.path.join(fr, names[len(names) * 3 // 4]) if names else None
 
     def video_path(self, tid):
         if "/" in tid or ".." in tid:

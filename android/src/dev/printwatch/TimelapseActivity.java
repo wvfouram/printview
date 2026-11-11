@@ -18,8 +18,8 @@ import org.json.JSONObject;
 
 /** Timelapse videos on the printer's SD card: play or save to the phone. */
 public class TimelapseActivity extends Base {
-    private LinearLayout list;
-    private TextView status;
+    private LinearLayout list, piList;
+    private TextView status, piStatus;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -30,6 +30,12 @@ public class TimelapseActivity extends Base {
         refresh.setMinHeight(Ui.dp(this, 44));
         refresh.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { load(true); } });
         p.addView(refresh);
+        p.addView(Ui.heading(this, "Made by the Pi (per layer)"));
+        piStatus = note(p, "Loading...");
+        piList = new LinearLayout(this);
+        piList.setOrientation(LinearLayout.VERTICAL);
+        p.addView(piList);
+        p.addView(Ui.heading(this, "From the printer's SD card"));
         status = note(p, "Reading the SD card...");
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -38,7 +44,42 @@ public class TimelapseActivity extends Base {
         load(false);
     }
 
+    private void loadPi() {
+        getJson("/api/timelapse", new Done<JSONObject>() {
+            public void run(JSONObject v, String e) {
+                piList.removeAllViews();
+                if (e != null) { piStatus.setText(e); return; }
+                JSONArray a = v.optJSONArray("items");
+                int n = a == null ? 0 : a.length();
+                piStatus.setText(n == 0 ? "None yet. The Pi records one frame per layer of every print." : n + " timelapse" + (n == 1 ? "" : "s"));
+                boolean busy = false;
+                for (int i = 0; i < n; i++) {
+                    JSONObject x = a.optJSONObject(i);
+                    try {
+                        String job = x.optString("job").isEmpty() ? x.optString("id") : x.optString("job");
+                        job = job.replaceAll("(?i)(\\.gcode)?\\.3mf$", "");
+                        String id = x.optString("id");
+                        String when = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(new java.util.Date(x.optLong("t") * 1000L));
+                        JSONObject t = new JSONObject();
+                        t.put("name", job + ".mp4");
+                        t.put("size", x.optLong("bytes"));
+                        t.put("date", when + " · " + x.optInt("frames") + " layers");
+                        t.put("url", "/api/timelapse/" + q(id) + "/timelapse.mp4");
+                        t.put("thumbUrl", "/api/timelapse/" + q(id) + "/thumb.jpg");
+                        t.put("pi", id);
+                        t.put("video", x.optBoolean("video"));
+                        t.put("state", x.optBoolean("rendering") ? "Making video..." : x.optBoolean("queued") ? "Queued" : "");
+                        busy |= x.optBoolean("rendering") || x.optBoolean("queued");
+                        piList.addView(row(t));
+                    } catch (Exception ignored) { }
+                }
+                if (busy) ui.postDelayed(new Runnable() { public void run() { if (!isFinishing()) loadPi(); } }, 4000);
+            }
+        });
+    }
+
     private void load(boolean refresh) {
+        loadPi();
         getJson("/api/timelapses" + (refresh ? "?refresh=1" : ""), new Done<JSONObject>() {
             public void run(JSONObject v, String e) {
                 list.removeAllViews();
@@ -62,19 +103,30 @@ public class TimelapseActivity extends Base {
         r.setLayoutParams(lp);
         ImageView th = thumb(96, 54);
         r.addView(th);
-        if (!t.isNull("thumb")) image("/api/timelapses/thumb?path=" + q(t.optString("thumb")), th);
+        if (t.has("thumbUrl")) image(t.optString("thumbUrl"), th);
+        else if (!t.isNull("thumb")) image("/api/timelapses/thumb?path=" + q(t.optString("thumb")), th);
         LinearLayout info = new LinearLayout(c);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setPadding(Ui.dp(c, 12), 0, 0, 0);
         TextView nm = Ui.text(c, t.optString("name"), 13, Ui.TEXT, true);
         nm.setSingleLine(true);
         info.addView(nm);
-        TextView s = Ui.text(c, size(t.optLong("size")) + " · " + t.optString("date"), 12, Ui.MUTED, false);
+        boolean noVid = t.has("pi") && !t.optBoolean("video");
+        String sub = noVid ? (t.optString("state").isEmpty() ? "Tap to make the video" : t.optString("state")) + " · " + t.optString("date")
+                : size(t.optLong("size")) + " · " + t.optString("date");
+        TextView s = Ui.text(c, sub, 12, noVid && t.optString("state").isEmpty() ? Ui.ACCENT : Ui.MUTED, false);
         s.setTypeface(Ui.MONO);
         info.addView(s);
         r.addView(info, Ui.weight(1));
         r.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                if (t.has("pi") && !t.optBoolean("video")) {
+                    if (!t.optString("state").isEmpty()) return;
+                    post("/api/timelapse/" + q(t.optString("pi")) + "/render", "{}", new Done<JSONObject>() {
+                        public void run(JSONObject r, String e) { toast(e != null ? e : "Making the video..."); loadPi(); }
+                    });
+                    return;
+                }
                 new AlertDialog.Builder(TimelapseActivity.this, android.R.style.Theme_Material_Dialog_Alert)
                         .setTitle(t.optString("name"))
                         .setItems(new String[]{"Play", "Save / share"}, new DialogInterface.OnClickListener() {
@@ -107,7 +159,8 @@ public class TimelapseActivity extends Base {
                 java.net.HttpURLConnection h = null;
                 java.io.File tmp = new java.io.File(out.getPath() + ".part");
                 try {
-                    h = Api.stream(TimelapseActivity.this, "/api/timelapses/download?path=" + q(t.optString("path")));
+                    h = Api.stream(TimelapseActivity.this, t.has("url") ? t.optString("url")
+                            : "/api/timelapses/download?path=" + q(t.optString("path")));
                     if (h.getResponseCode() != 200) throw new java.io.IOException("HTTP " + h.getResponseCode());
                     long total = t.optLong("size"), got = 0;
                     java.io.InputStream in = h.getInputStream();

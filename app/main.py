@@ -126,6 +126,7 @@ def build_app():
     app.router.add_get("/api/timelapse", api_tl_list)
     app.router.add_post("/api/timelapse/{tid}/render", api_tl_render)
     app.router.add_get("/api/timelapse/{tid}/timelapse.mp4", api_tl_video)
+    app.router.add_get("/api/timelapse/{tid}/thumb.jpg", api_tl_thumb)
     app.router.add_get("/api/stream", api_stream)
     app.router.add_post("/api/cmd", api_cmd)
     app.router.add_post("/api/settings", api_settings)
@@ -324,10 +325,15 @@ async def api_tl_list(request):
 
 
 async def api_tl_render(request):
-    if request.get("remote"):
-        return web.json_response({"error": "not from the web link"}, status=403)
     ok = request.app["timelapse"].render(request.match_info["tid"])
     return web.json_response({"ok": ok}, status=200 if ok else 404)
+
+
+async def api_tl_thumb(request):
+    p = request.app["timelapse"].thumb_path(request.match_info["tid"])
+    if not p:
+        raise web.HTTPNotFound()
+    return web.FileResponse(p, headers={"Cache-Control": "max-age=3600"})
 
 
 async def api_tl_video(request):

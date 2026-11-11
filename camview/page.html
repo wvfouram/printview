@@ -1257,12 +1257,33 @@ VIEWS.job = {
 // ---------- Timelapses
 VIEWS.timelapses = {
   build(el) {
-    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Timelapses</div><button class="btn sm" id="tRef">Refresh</button></div>
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Made by the Pi (per layer)</div></div>
+      <div class="list" id="tPi" style="margin-top:10px"><div class="mu">Loading...</div></div></div>
+      <div class="card"><div class="row"><div class="h grow" style="margin:0">From the printer's SD card</div><button class="btn sm" id="tRef">Refresh</button></div>
       <div class="list" id="tList" style="margin-top:10px"><div class="mu">Loading...</div></div></div>`;
     $("#tRef").onclick = () => this.load(true);
     this.load(false);
   },
+  async loadPi() {
+    clearTimeout(this.piT);
+    try {
+      const v = (await api("/api/timelapse")).items || [];
+      const busy = v.some(x => x.rendering || x.queued);
+      $("#tPi").innerHTML = v.length ? v.map(x => {
+        const when = new Date((x.t || 0) * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
+        const btn = x.video ? `<a class="btn sm" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" target="_blank" rel="noopener" style="margin-right:6px">Play</a><a class="btn sm" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" download="${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}.mp4">Download</a>`
+          : x.rendering ? '<span class="chip" style="color:var(--ac)">Making video...</span>' : x.queued ? '<span class="chip">Queued</span>'
+          : `<button class="btn sm pri" data-mk="${esc(x.id)}">Make video</button>`;
+        return `<div><img class="thumb" loading="lazy" src="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/thumb.jpg" onerror="this.style.visibility='hidden'">
+          <div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}</div>
+          <div class="fa sm">${when} · ${x.frames} layers${x.mb ? " · " + x.mb + " MB" : ""}</div></div>${btn}</div>`; }).join("")
+        : '<div class="mu">None yet. The Pi records one frame per layer of every print.</div>';
+      $("#tPi").querySelectorAll("[data-mk]").forEach(b => b.onclick = async () => { try { await api("/api/timelapse/" + encodeURIComponent(b.dataset.mk) + "/render", {}); toast("Making the video..."); this.loadPi(); } catch (e) { toast(e.message); } });
+      if (busy && tab === "timelapses") this.piT = setTimeout(() => this.loadPi(), 4000);
+    } catch (e) { $("#tPi").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  },
   async load(refresh) {
+    this.loadPi();
     try {
       const j = await api("/api/timelapses" + (refresh ? "?refresh=1" : ""));
       const v = Array.isArray(j) ? j : j.list || [];
