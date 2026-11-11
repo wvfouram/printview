@@ -110,6 +110,36 @@ class Dataset:
                 m.update(n=self._n, dim=int(emb.shape[0]), last_tick=time.time())
                 self._write_meta(pid, m)
 
+    PHOTOS = "photos"
+
+    def add_photo(self, img, emb: np.ndarray, p_obico: float):
+        """A spaghetti picture someone uploaded. All of them live in one entry labeled failed; the trainer
+        uses them as extra failure examples (they don't count as failed prints)."""
+        with self._lock:
+            pid = self.PHOTOS
+            d = self._dir(pid)
+            os.makedirs(os.path.join(d, "frames"), exist_ok=True)
+            m = self.meta(pid) or {"id": pid, "job": "Uploaded spaghetti photos", "started": time.time(),
+                                   "ended": time.time(), "status": "done", "end_state": "PHOTOS", "label": "failed",
+                                   "auto": False, "fail_start": 0, "flagged": False, "n": 0, "dim": None,
+                                   "frames_pruned": False, "last_tick": None, "source": "upload"}
+            if m.get("dim") and m["dim"] != int(emb.shape[0]):
+                raise ValueError("feature size changed; delete the old uploaded photos first")
+            i = m["n"]
+            th = img.convert("RGB")
+            if th.width > THUMB_W:
+                th = th.resize((THUMB_W, round(th.height * THUMB_W / th.width)))
+            th.save(self.frame_path(pid, i), "JPEG", quality=80)
+            with open(os.path.join(d, "emb.f16"), "ab") as f:
+                f.write(emb.astype(np.float16).tobytes())
+            with open(os.path.join(d, "ticks.jsonl"), "a") as f:
+                f.write(json.dumps({"i": i, "t": round(time.time(), 1), "po": round(p_obico, 4), "pc": None}) + "\n")
+            m.update(n=i + 1, dim=int(emb.shape[0]), ended=time.time(), last_tick=time.time(), label="failed", fail_start=0)
+            self._write_meta(pid, m)
+        for fn in self._listeners:
+            fn()
+        return m
+
     def end_print(self, end_state: str, flagged: bool):
         with self._lock:
             pid, self.current = self.current, None
@@ -221,9 +251,12 @@ class Dataset:
             log.exception("prune failed")
 
     def counts(self):
-        c = {"good": 0, "failed": 0, "ignore": 0, "review": 0}
+        c = {"good": 0, "failed": 0, "ignore": 0, "review": 0, "photos": 0}
         for m in self.list():
             if m["status"] == "recording":
+                continue
+            if m.get("source") == "upload":
+                c["photos"] = m.get("n", 0)
                 continue
             c[m["label"] or "review"] += 1
         return c

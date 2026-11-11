@@ -573,6 +573,26 @@ class H(BaseHTTPRequestHandler):
             if act == "gcode":
                 return self.json(403, {"ok": False, "error": "Raw G-code needs the master code"})
             return self.proxy(method, sub, data)
+        if method == "POST" and sub == "/api/prints/photos/delete" and s["role"] != "master":
+            return self.json(403, {"ok": False, "error": "Needs the master code"})
+        if method == "POST" and sub == "/api/train/photo":     # teaching the detector: master code only
+            if s["role"] != "master":
+                return self.json(403, {"ok": False, "error": "Uploading training photos needs the master code"})
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                n = 0
+            if not 0 < n <= 2_000_000:
+                return self.json(400, {"ok": False, "error": "picture too big"})
+            req = urllib.request.Request(APP + sub, data=self.rfile.read(n), method="POST")
+            req.add_header("Content-Type", "application/octet-stream")
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    return self.send(r.status, r.read(), "application/json")
+            except urllib.error.HTTPError as e:
+                return self.send(e.code, e.read(), "application/json")
+            except Exception:
+                return self.json(502, {"ok": False, "error": "PrintWatch isn't answering"})
         if method == "POST" and sub == "/api/upload":
             return self.upload_proxy(query)
         if sub.startswith("/api/") and not sub.startswith(BLOCKED):

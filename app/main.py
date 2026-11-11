@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import re
 import hmac
+import io
 import json
 import logging
 import os
@@ -167,6 +168,7 @@ def build_app():
     app.router.add_get("/train", train_page)
     app.router.add_get("/api/train", api_train_status)
     app.router.add_post("/api/train", api_train_now)
+    app.router.add_post("/api/train/photo", api_train_photo)
     app.router.add_get("/api/prints", api_prints)
     app.router.add_get("/api/prints/{pid}", api_print)
     app.router.add_post("/api/prints/{pid}/label", api_label)
@@ -478,10 +480,36 @@ async def api_train_now(request):
     return web.json_response(request.app["trainer"].status())
 
 
+async def api_train_photo(request):
+    """One spaghetti picture (raw JPEG/PNG body). Runs it through the detector and keeps it as a failure example."""
+    data = await request.read()
+    if not data or len(data) > 8_000_000:
+        return web.json_response({"ok": False, "error": "send one picture, up to 8 MB"}, status=400)
+
+    def work():
+        from PIL import Image
+        img = Image.open(io.BytesIO(data))
+        img.load()
+        img = img.convert("RGB")
+        dets, feats = request.app["detector"].model.detect(img)
+        if feats is None:
+            raise ValueError("the detector gave no features for this picture")
+        m = request.app["dataset"].add_photo(img, feats, sum(c for c, _ in dets))
+        return m["n"], round(max([c for c, _ in dets] or [0]), 2)
+    try:
+        n, conf = await _run(work)
+    except Exception as e:  # noqa: BLE001
+        return web.json_response({"ok": False, "error": f"couldn't use that picture: {e}"}, status=400)
+    request.app["trainer"].schedule()
+    return web.json_response({"ok": True, "photos": n, "obico_saw": conf})
+
+
 async def api_prints(request):
     ds = request.app["dataset"]
     out = []
     for m in ds.list():
+        if m.get("source") == "upload":       # uploaded photos have their own card
+            continue
         m = dict(m)
         m["thumb"] = None if m.get("frames_pruned") or not m["n"] else max(0, m["n"] // 2)
         out.append(m)

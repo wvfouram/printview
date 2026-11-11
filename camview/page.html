@@ -995,6 +995,34 @@ VIEWS.ams = {
   }
 };
 
+// ---------- spaghetti photo upload (resized here so each one stays small)
+function uploadPhotos(done) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+  inp.onchange = async () => {
+    const files = [...inp.files], msg = $("#phMsg");
+    let ok = 0, bad = 0;
+    for (const [k, f] of files.entries()) {
+      msg.textContent = `Uploading ${k + 1} of ${files.length}...`;
+      try {
+        const bmp = await createImageBitmap(f);
+        const sc = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+        cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+        const blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85));
+        const r = await fetch(BASE + "/api/train/photo", {method: "POST", credentials: "same-origin", headers: {"X-PW": "1", "Content-Type": "image/jpeg"}, body: blob});
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.ok === false) throw new Error(j.error || "HTTP " + r.status);
+        ok++;
+      } catch (e) { bad++; toast(f.name + ": " + e.message); }
+    }
+    msg.textContent = `${ok} added${bad ? ", " + bad + " failed" : ""}. Your model retrains in about 20 seconds.`;
+    done && done();
+  };
+  inp.click();
+}
+
 // ---------- 3D toolpath preview (cached per file + plate while the page is open)
 const _g3d = new Map();
 async function load3d(f, plate) {
@@ -1251,13 +1279,31 @@ VIEWS.train = {
       <div class="sm" id="trInfo" style="margin-top:10px;white-space:pre-line"></div>
       <div class="row" style="margin-top:12px"><button class="btn sm pri" id="trNow">Train now</button><span class="mu sm" id="trState"></span></div>
       <div class="row" style="margin-top:12px"><span class="grow">Let my model decide when to pause</span><label class="sw"><input type="checkbox" id="trUse"><span></span></label></div></div>
+      <div class="card"><div class="row"><div class="h grow" style="margin:0">Spaghetti photos</div><span class="chip" id="phCount">0</span></div>
+        <div class="mu sm" style="margin:8px 0 12px">Upload pictures of failed prints (spaghetti, blobs, knocked-off parts). Your model learns from them as extra failure examples. Best results: photos from your printer's own camera angle. They add to your failed prints, they don't replace them.</div>
+        <div class="row"><button class="btn sm pri" id="phUp">Upload photos</button><button class="btn sm bad" id="phDel" style="margin-left:6px">Delete all</button><span class="mu sm grow" id="phMsg" style="margin-left:10px"></span></div>
+        <div id="phGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin-top:12px"></div></div>
       <div class="card"><div class="seg" id="trF"><button data-v="review">To review</button><button data-v="all">All</button><button data-v="failed">Failed</button><button data-v="good">Good</button></div>
       <div class="list" id="trList" style="margin-top:10px"></div></div><div id="trRev"></div>`;
     $("#trNow").onclick = async () => { try { await api("/api/train", {}); toast("Training..."); this.loadModel(); } catch (e) { toast(e.message); } };
     $("#trUse").onchange = e => setting({use_custom: e.target.checked}, e.target.checked ? "Your model is on" : "Using Obico stock");
     paintSeg("#trF", trFilter);
     el.querySelectorAll("#trF button").forEach(b => b.onclick = () => { trFilter = b.dataset.v; paintSeg("#trF", trFilter); this.loadList(); });
-    this.loadModel(); this.loadList();
+    $("#phUp").onclick = () => uploadPhotos(() => this.loadPhotos());
+    $("#phDel").onclick = () => confirmBox("Delete all uploaded photos?", "Your model forgets them at the next training.", "Delete", async () => {
+      try { await api("/api/prints/photos/delete", {}); toast("Deleted"); this.loadPhotos(); } catch (e) { toast(e.message); }
+    }, true);
+    if (role !== "master") { $("#phUp").disabled = $("#phDel").disabled = true; $("#phMsg").textContent = "Needs the master code."; }
+    this.loadModel(); this.loadList(); this.loadPhotos();
+  },
+  async loadPhotos() {
+    try {
+      const m = (await api("/api/prints/photos")).meta || {};
+      const n = m.n || 0;
+      $("#phCount").textContent = n + (n === 1 ? " photo" : " photos");
+      $("#phGrid").innerHTML = Array.from({length: Math.min(n, 60)}, (_, k) => n - 1 - k).map(i =>
+        `<img loading="lazy" src="${BASE}/api/prints/photos/frame/${i}" style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--s2)">`).join("");
+    } catch (e) { $("#phCount").textContent = "0 photos"; $("#phGrid").innerHTML = ""; }
   },
   update(s) { if (s.settings && document.activeElement !== $("#trUse")) $("#trUse").checked = s.settings.use_custom !== false; },
   async loadModel() {

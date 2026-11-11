@@ -131,6 +131,8 @@ def _load(dataset):
     for m in dataset.list():
         if m["status"] != "done" or m["label"] not in ("good", "failed") or not m.get("dim"):
             continue
+        if m.get("source") == "upload":       # uploaded photos: extra failure examples, handled in train()
+            continue
         X = dataset.embeddings(m["id"], m["dim"])
         if X is None or len(X) < WARMUP_TICKS + 2:
             continue
@@ -153,8 +155,19 @@ def _load(dataset):
     return prints
 
 
-def _matrix(prints, rng):
+def _photos(dataset, dim):
+    """Uploaded spaghetti photos as extra failure frames (training only, never scored as prints)."""
+    m = dataset.meta(dataset.PHOTOS) if hasattr(dataset, "PHOTOS") else None
+    if not m or m.get("dim") != dim or m.get("label") != "failed":
+        return None
+    X = dataset.embeddings(m["id"], dim)
+    return X if X is not None and len(X) else None
+
+
+def _matrix(prints, rng, extra=None):
     Xs, ys = [], []
+    if extra is not None:
+        Xs.append(extra); ys.append(np.ones(len(extra), np.float32))
     for p in prints:
         idx = np.where(p["mask"])[0]
         if p["failed"]:  # keep every failure frame, subsample the good part
@@ -206,6 +219,9 @@ def train(dataset):
     if nf < MIN_FAILED or ng < MIN_GOOD:
         return None, {**base, "ok": False, "message": "Not enough labeled prints yet"}
 
+    photos = _photos(dataset, prints[0]["dim"])
+    base["photos"] = 0 if photos is None else int(len(photos))
+
     # grouped, stratified folds: a print never appears in both train and test
     k = min(5, nf)
     folds = [[] for _ in range(k)]
@@ -216,7 +232,7 @@ def train(dataset):
     oof = {}
     for f in range(k):
         train_set = [p for g, fold in enumerate(folds) if g != f for p in fold]
-        X, y = _matrix(train_set, rng)
+        X, y = _matrix(train_set, rng, photos)
         params = fit_logreg(X, y)
         for p in folds[f]:
             oof[p["id"]] = predict(params, p["X"])
@@ -236,7 +252,7 @@ def train(dataset):
                            np.concatenate([p["y"][p["mask"]] for p in prints]))
     obico = _evaluate(prints, [p["po"] for p in prints], None, obico_trigger)
 
-    X, y = _matrix(prints, rng)
+    X, y = _matrix(prints, rng, photos)
     final = fit_logreg(X, y)
     report = {**base, "ok": True, "threshold": round(T, 3), "cv": cv, "obico": obico,
               "frames": int(len(X)), "seconds": round(time.time() - t0, 1),
