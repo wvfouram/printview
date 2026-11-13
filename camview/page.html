@@ -24,6 +24,12 @@ header h1:before{content:"";width:10px;height:10px;border-radius:3px;background:
 .grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
 .grid>*{min-width:0}
 @media(min-width:960px){.grid.unlocked{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}.grid.unlocked .camcol{position:sticky;top:16px}}
+.camcol>.card{margin-top:12px}
+#views>div>div+div{margin-top:12px}
+.btn.icon{width:36px;padding:0;flex:none}.btn.icon svg{width:17px;height:17px}
+.tabs button{padding:8px 11px;font-size:14px;flex:1 0 auto}
+@media(max-width:600px){.stat b{font-size:13.5px;letter-spacing:-.01em}.stat{padding:8px 8px}.stats{gap:6px}.big{font-size:44px}.card{padding:15px}}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;font-size:14px}.kv dt{color:var(--mu)}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .cam{position:relative;background:#000;border-radius:var(--r);overflow:hidden;aspect-ratio:16/9;box-shadow:0 0 0 1px var(--line),0 20px 50px -25px #000}
 .cam img{width:100%;height:100%;object-fit:contain;display:block}
 .cam .scrim{position:absolute;inset:0;background:linear-gradient(#0008,transparent 30%,transparent 70%,#0009);pointer-events:none}
@@ -43,7 +49,7 @@ header h1:before{content:"";width:10px;height:10px;border-radius:3px;background:
 .mu{color:var(--mu)}.fa{color:var(--fa)}.sm{font-size:13px}
 .bar{height:8px;background:var(--s3);border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:99px;transition:width .4s;box-shadow:0 0 12px #ffb22466}
 .big{font-size:52px;font-weight:250;line-height:1;letter-spacing:-.03em}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}
 .stat{background:var(--s2);border:1px solid var(--line);border-radius:14px;padding:10px 12px}.stat b{display:block;font-weight:600;font-size:17px;margin-top:3px}
 .btn{border:1px solid var(--line2);border-radius:var(--r2);padding:12px 16px;font-weight:600;cursor:pointer;background:var(--s2);display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;transition:background .15s,border-color .15s,transform .08s,box-shadow .15s;text-decoration:none;color:var(--tx)}
 .btn:hover{background:var(--s3);border-color:#454b54}.btn:active{transform:translateY(1px)}
@@ -157,6 +163,16 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
           <div class="grow" style="padding-bottom:6px"><div class="num" id="fsLeft" style="font-weight:600"></div><div class="mu sm num" id="fsStats"></div></div>
           <button class="btn pri hide" id="fsPause"></button>
         </div>
+      </div>
+      <div class="card now" id="nowCard">
+        <div class="row"><div class="mu grow" id="wJob" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No active print</div><span class="chip" id="wWatch" title="Spaghetti watch">-</span></div>
+        <div class="row" style="align-items:flex-end;margin-top:6px"><div class="big num grow" id="wPct">--%</div>
+          <div style="text-align:right;padding-bottom:6px"><div class="num" id="wRem" style="font-size:20px;font-weight:600">--</div><div class="mu sm" id="wEta">remaining</div></div></div>
+        <div class="bar" style="margin-top:12px"><i id="wBar"></i></div>
+        <div class="stats"><div class="stat"><span class="mu sm">Layer</span><b class="num" id="wLayer">--</b></div>
+          <div class="stat"><span class="mu sm">Nozzle</span><b class="num" id="wNoz">--</b></div>
+          <div class="stat"><span class="mu sm">Bed</span><b class="num" id="wBed">--</b></div></div>
+        <div class="row ro-hide" style="margin-top:14px"><button class="btn pri grow" id="wPause" style="flex:2"></button><button class="btn bad grow" id="wStop"></button></div>
       </div>
       <div class="lock card hide" id="lockCard">
         <div class="h" style="margin-bottom:6px" id="lockTitle">Controls locked</div>
@@ -440,11 +456,13 @@ const IC = {
   stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
   bulb:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="9.5" r="6"/><path d="M9.5 18.5h5M10.5 21.5h3"/></svg>',
   bulbOn:'<svg viewBox="0 0 24 24" fill="#ffb224" stroke="#ffb224" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="9.5" r="6"/><path d="M9.5 18.5h5M10.5 21.5h3"/></svg>',
+  dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   fs:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>',
 };
 $("#fsBtn").innerHTML = IC.fs;
 
-let unlocked = false, role = null, frozen = false, readOnly = true, status = null, tab = "watch", busy = false;
+let unlocked = false, role = null, frozen = false, readOnly = true, status = null, tab = "printtab", busy = false;
 let toastT;
 function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
 
@@ -551,7 +569,7 @@ function setUnlocked(v, r) {
   $("#lightBtn").classList.toggle("hide", !usable);
   $("#grid").classList.add("unlocked");
   if (!usable) $("#fsPause").classList.add("hide");
-  if (!tabList().some(t => t[0] === tab)) tab = "watch";
+  if (!tabList().some(t => t[0] === tab)) tab = tabList()[0][0];
   renderTabs(); poll();
 }
 function setFrozen(f) {
@@ -607,6 +625,7 @@ function render() {
   fp.className = "btn " + (p.state === "PAUSE" ? "go" : "pri") + (fp.classList.contains("hide") ? " hide" : "");
   fp.innerHTML = p.state === "PAUSE" ? IC.play + "Resume" : IC.pause + "Pause";
   fp.onclick = () => cmd(p.state === "PAUSE" ? "resume" : "pause", null, p.state === "PAUSE" ? "Resuming..." : "Pausing...");
+  NOW.update(s);
   const v = VIEWS[tab];
   if (v && v.update) v.update(s);
 }
@@ -640,9 +659,25 @@ function bedServo(b) { window._bc = b;
 
 // ------------------------------------------------------------ tabs
 const VIEWS = {};
-const TABS = [["watch", "Watch"], ["controls", "Controls"], ["ams", "AMS"], ["print", "Print from SD"], ["job", "Current job"], ["timelapses", "Timelapses"], ["history", "History"], ["train", "Train"]];
-const RO_TABS = [["watch", "Watch"], ["controls", "Settings"], ["ams", "AMS"], ["job", "Current job"]];
-function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["flow", "Data flow"], ["admin", "Command center"]]) : TABS; }
+// a tab made of several views, each in its own box
+function compose(...parts) {
+  return {
+    build(el) {
+      this.live = parts.map(([v, arg, when]) => {
+        if (when && !when()) return null;
+        const box = document.createElement("div"); el.appendChild(box);
+        const view = typeof v === "string" ? VIEWS[v] : v;
+        view.build(box, arg);
+        return view;
+      }).filter(Boolean);
+    },
+    update(s) { for (const v of this.live || []) if (v.update) try { v.update(s); } catch (e) { console.warn(e); } }
+  };
+}
+const printing = () => status && active(status.printer.state);
+const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["videos", "Videos"], ["printer", "Printer"]];
+const RO_TABS = [["control", "Settings"], ["amstab", "AMS"], ["printer", "Printer"]];
+function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Owner"]]) : TABS; }
 function renderTabs() {
   const tabs = tabList();
   $("#tabs").innerHTML = tabs.map(([k, n]) => `<button data-k="${k}" class="${k === tab ? "on" : ""}"${k === "admin" ? ' style="color:var(--ac)"' : ""}>${n}</button>`).join("");
@@ -655,36 +690,11 @@ function renderTabs() {
   if (status && v.update) v.update(status);
 }
 
-// ---------- Watch
-VIEWS.watch = {
-  build(el) {
-    el.innerHTML = `
-    <div class="card">
-      <div class="mu" id="wJob" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No active print</div>
-      <div class="row" style="align-items:flex-end;margin-top:6px"><div class="big num grow" id="wPct">--%</div>
-        <div style="text-align:right;padding-bottom:6px"><div class="num" id="wRem" style="font-size:20px;font-weight:600">--</div><div class="mu sm" id="wEta">remaining</div></div></div>
-      <div class="bar" style="margin-top:12px"><i id="wBar"></i></div>
-      <div class="stats"><div class="stat"><span class="mu sm">Layer</span><b class="num" id="wLayer">--</b></div>
-        <div class="stat"><span class="mu sm">Nozzle</span><b class="num" id="wNoz">--</b></div>
-        <div class="stat"><span class="mu sm">Bed</span><b class="num" id="wBed">--</b></div></div>
-      <div class="row" style="margin-top:14px"><button class="btn pri grow" id="wPause" style="flex:2"></button><button class="btn bad grow" id="wStop">${IC.stop}Stop</button></div>
-    </div>
-    <div class="card">
-      <div class="row"><div class="h grow" style="margin:0">Spaghetti watch</div><span class="chip" id="wWatch">-</span></div>
-      <div class="bar" style="margin-top:14px"><i id="wScore" style="background:var(--ok)"></i></div>
-      <div class="row fa sm" style="margin-top:6px"><span class="grow">Clean</span><span>Pause</span></div>
-      <div class="div"></div>
-      <div class="row"><div class="grow"><div style="font-weight:600">Auto-pause</div><div class="mu sm">Pause the print when a failure is detected</div></div>
-        <label class="sw"><input type="checkbox" id="wAuto"><span></span></label></div>
-      <div class="div"></div>
-      <div style="font-weight:600;margin-bottom:10px">Sensitivity</div>
-      <div class="seg" id="wSens"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
-      <div class="mu sm ro-hide" id="wModel" style="margin-top:12px;white-space:pre-line"></div>
-    </div>
-    <div class="card ro-hide"><div class="h">Activity</div><div id="wEvents"></div></div>`;
+// ---------- Status card under the camera (every tab, locked or not)
+const NOW = {
+  init() {
+    $("#wStop").innerHTML = IC.stop + "Stop";
     $("#wStop").onclick = () => confirmBox("Stop this print?", "This cancels the job on the printer. It can't be resumed.", "Stop print", () => cmd("stop", {confirm: "STOP"}, "Stopping..."), true);
-    $("#wAuto").onchange = e => setting({auto_pause: e.target.checked}, e.target.checked ? "Auto-pause on" : "Auto-pause off");
-    el.querySelectorAll("#wSens button").forEach(b => b.onclick = () => { paintSeg("#wSens", b.dataset.v); setting({sensitivity: b.dataset.v}); });
   },
   update(s) {
     const p = s.printer, d = s.detector || {}, act = active(p.state);
@@ -707,27 +717,64 @@ VIEWS.watch = {
     pb.disabled = !p.connected || !(paused || p.state === "RUNNING");
     pb.onclick = () => cmd(paused ? "resume" : "pause", null, paused ? "Resuming..." : "Pausing...");
     $("#wStop").disabled = !(p.connected && act);
-    const custom = d.mode === "custom";
-    let sc = custom ? d.custom_score : d.score; if (sc == null || isNaN(sc)) sc = 0;
-    const pa = custom ? (d.custom_pause_at ?? 0.8) : (d.pause_at ?? 0.78), wa = custom ? (d.custom_warn_at ?? 0.6) : (d.warn_at ?? 0.38);
-    const max = custom ? 1 : pa * 1.3, risk = sc >= pa ? "var(--bad)" : sc >= wa ? "var(--ac)" : "var(--ok)";
-    $("#wScore").style.width = Math.min(100, sc / max * 100) + "%";
-    $("#wScore").style.background = risk;
-    let ws = "Watching" + (d.infer_ms != null ? " · " + d.infer_ms + " ms" : ""), wc = risk;
-    if (!d.enabled) { ws = "Off"; wc = ""; }
-    else if (p.state !== "RUNNING") { ws = p.state === "PAUSE" ? "Paused" : "Idle"; wc = ""; }
-    else if (d.acted) { ws = "Failure flagged"; wc = "var(--bad)"; }
-    else if (d.warmup_s > 0) { ws = "Warming up " + Math.floor(d.warmup_s / 60) + ":" + String(d.warmup_s % 60).padStart(2, "0"); wc = ""; }
-    $("#wWatch").textContent = ws; $("#wWatch").style.color = wc;
-    if (s.settings) { $("#wAuto").checked = !!s.settings.auto_pause; paintSeg("#wSens", s.settings.sensitivity || "medium"); }
+    const w = watchState(s);
+    $("#wWatch").textContent = "Spaghetti: " + w.text; $("#wWatch").style.color = w.color;
+  }
+};
+NOW.init();
+function watchState(s) {
+  const p = s.printer, d = s.detector || {}, custom = d.mode === "custom";
+  let sc = custom ? d.custom_score : d.score; if (sc == null || isNaN(sc)) sc = 0;
+  const pa = custom ? (d.custom_pause_at ?? 0.8) : (d.pause_at ?? 0.78), wa = custom ? (d.custom_warn_at ?? 0.6) : (d.warn_at ?? 0.38);
+  const max = custom ? 1 : pa * 1.3, risk = sc >= pa ? "var(--bad)" : sc >= wa ? "var(--ac)" : "var(--ok)";
+  let text = "watching", color = risk;
+  if (!d.enabled) { text = "off"; color = ""; }
+  else if (p.state !== "RUNNING") { text = p.state === "PAUSE" ? "paused" : "idle"; color = ""; }
+  else if (d.acted) { text = "failure flagged"; color = "var(--bad)"; }
+  else if (d.warmup_s > 0) { text = "warming up"; color = ""; }
+  return {text, color, pct: Math.min(100, sc / max * 100), risk, custom, ms: d.infer_ms};
+}
+
+// ---------- Spaghetti watch settings (Safety tab)
+VIEWS.watch = {
+  build(el) {
+    el.innerHTML = `
+    <div class="card">
+      <div class="row"><div class="h grow" style="margin:0">Spaghetti watch</div><span class="chip" id="sWatch">-</span></div>
+      <div class="bar" style="margin-top:14px"><i id="wScore" style="background:var(--ok)"></i></div>
+      <div class="row fa sm" style="margin-top:6px"><span class="grow">Clean</span><span>Pause</span></div>
+      <div class="div"></div>
+      <div class="row"><div class="grow"><div style="font-weight:600">Auto-pause</div><div class="mu sm">Pause the print when a failure is detected</div></div>
+        <label class="sw"><input type="checkbox" id="wAuto"><span></span></label></div>
+      <div class="div"></div>
+      <div style="font-weight:600;margin-bottom:10px">Sensitivity</div>
+      <div class="seg" id="wSens"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
+      <div class="mu sm ro-hide" id="wModel" style="margin-top:12px;white-space:pre-line"></div>
+    </div>`;
+    $("#wAuto").onchange = e => setting({auto_pause: e.target.checked}, e.target.checked ? "Auto-pause on" : "Auto-pause off");
+    el.querySelectorAll("#wSens button").forEach(b => b.onclick = () => { paintSeg("#wSens", b.dataset.v); setting({sensitivity: b.dataset.v}); });
+  },
+  update(s) {
+    const w = watchState(s);
+    $("#wScore").style.width = w.pct + "%"; $("#wScore").style.background = w.risk;
+    $("#sWatch").textContent = w.text[0].toUpperCase() + w.text.slice(1) + (w.text === "watching" && w.ms != null ? " · " + w.ms + " ms" : "");
+    $("#sWatch").style.color = w.color;
+    if (s.settings) { if (document.activeElement !== $("#wAuto")) $("#wAuto").checked = !!s.settings.auto_pause; paintSeg("#wSens", s.settings.sensitivity || "medium"); }
     const tr = s.training;
-    if (tr) $("#wModel").textContent = (custom ? "Your model is in charge" + (tr.summary ? " · " + tr.summary : "") : tr.trained ? "Obico stock (your model is off)" : "Obico stock · label prints in Train to make yours")
+    if (tr) $("#wModel").textContent = (w.custom ? "Your model is in charge" + (tr.summary ? " · " + tr.summary : "") : tr.trained ? "Obico stock (your model is off)" : "Obico stock · label prints below to make yours")
       + (tr.review > 0 ? "\n" + tr.review + " print" + (tr.review === 1 ? "" : "s") + " to review" : "");
+  }
+};
+
+// ---------- Activity log (Printer tab)
+VIEWS.activity = {
+  build(el) { el.innerHTML = '<div class="card"><div class="h">Activity</div><div id="wEvents"></div></div>'; },
+  update(s) {
     const ev = s.events || [];
-    $("#wEvents").innerHTML = ev.length ? ev.slice(0, 10).map(e => {
-      const lo = (e.text || "").toLowerCase();
-      const c = /fail|stop|spaghetti/.test(lo) ? "var(--bad)" : /pause|warn/.test(lo) ? "var(--ac)" : /finish|done/.test(lo) ? "var(--ok)" : "";
-      return `<div class="ev"><i style="${c ? "background:" + c : ""}"></i><div class="grow">${esc(e.text)}</div><div class="fa sm num">${new Date(e.t * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}</div></div>`;
+    $("#wEvents").innerHTML = ev.length ? ev.slice(0, 15).map(e => {
+      const t = e.text || e.msg || "", lo = t.toLowerCase();
+      const c = /fail|stop|spaghetti/.test(lo) ? "var(--bad)" : /pause|warn|plate/.test(lo) ? "var(--ac)" : /finish|done|ready/.test(lo) ? "var(--ok)" : "";
+      return `<div class="ev"><i style="${c ? "background:" + c : ""}"></i><div class="grow">${esc(t)}</div><div class="fa sm num">${new Date(e.t * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})}</div></div>`;
     }).join("") : '<div class="mu" style="padding-top:8px">Nothing yet.</div>';
   }
 };
@@ -736,55 +783,54 @@ function paintSeg(sel, v) { document.querySelectorAll(sel + " button").forEach(b
 // ---------- Controls
 const FILAMENTS = [["PLA","PLA","PLA",190,230,"GFL99"],["PLA","PLA+ / PLA Pro","PLA",200,230,"GFL99"],["PLA","PLA Matte","PLA",190,230,"GFL99"],["PLA","PLA Silk","PLA",200,230,"GFL96"],["PLA","PLA Silk Dual/Tri Color","PLA",200,230,"GFL96"],["PLA","PLA High Speed","PLA",190,230,"GFL95"],["PLA","PLA Tough","PLA",200,230,"GFL99"],["PLA","PLA Translucent","PLA",190,230,"GFL99"],["PLA","PLA Glow in the Dark","PLA",190,230,"GFL99"],["PLA","PLA Sparkle / Galaxy","PLA",190,230,"GFL99"],["PLA","PLA Marble","PLA",190,230,"GFL99"],["PLA","PLA Wood","PLA",190,220,"GFL99"],["PLA","PLA Metal Fill","PLA",190,230,"GFL99"],["PLA","PLA Stone / Ceramic Fill","PLA",190,230,"GFL99"],["PLA","PLA Color Change (Thermo/UV)","PLA",190,220,"GFL99"],["PLA","PLA Heat Resistant (HTPLA)","PLA",200,230,"GFL99"],["PLA","PLA Lightweight / Aero (LW-PLA)","PLA-AERO",210,260,"GFL99"],["PLA","PLA-CF (Carbon Fiber)","PLA-CF",210,240,"GFL98"],["PLA","PLA-GF (Glass Fiber)","PLA-CF",210,240,"GFL98"],["PLA","Support for PLA","PLA-S",190,230,"GFL99"],["PETG","PETG","PETG",220,260,"GFG99"],["PETG","PETG HF (High Flow)","PETG",230,260,"GFG99"],["PETG","PETG Translucent","PETG",220,260,"GFG99"],["PETG","PETG Matte","PETG",220,260,"GFG99"],["PETG","PETG-CF (Carbon Fiber)","PETG-CF",240,270,"GFG98"],["PETG","PETG-GF (Glass Fiber)","PETG-CF",240,270,"GFG98"],["PETG","CPE / Co-polyester","PETG",240,260,"GFG99"],["PETG","PCTG","PCTG",240,270,"GFG99"],["PETG","PET-CF","PET-CF",260,290,"GFG98"],["PETG","rPETG (Recycled)","PETG",220,250,"GFG99"],["ABS / ASA","ABS","ABS",240,270,"GFB99"],["ABS / ASA","ABS-GF (Glass Fiber)","ABS-GF",240,270,"GFB99"],["ABS / ASA","ABS-CF (Carbon Fiber)","ABS",240,270,"GFB99"],["ABS / ASA","ASA","ASA",240,270,"GFB98"],["ABS / ASA","ASA-CF (Carbon Fiber)","ASA-CF",250,280,"GFB98"],["ABS / ASA","ASA Aero (Lightweight)","ASA-AERO",240,280,"GFB98"],["ABS / ASA","HIPS","HIPS",230,260,"GFS98"],["ABS / ASA","PC-ABS","PC",250,280,"GFC99"],["PC","PC (Polycarbonate)","PC",260,290,"GFC99"],["PC","PC-CF (Carbon Fiber)","PC",260,290,"GFC99"],["PC","PC-FR (Flame Retardant)","PC",260,290,"GFC99"],["Nylon","PA (Nylon)","PA",260,290,"GFN99"],["Nylon","PA6","PA",260,290,"GFN99"],["Nylon","PA12","PA",250,280,"GFN99"],["Nylon","PA-CF (Nylon Carbon Fiber)","PA-CF",260,290,"GFN98"],["Nylon","PA6-CF","PA6-CF",260,290,"GFN98"],["Nylon","PA12-CF","PA-CF",260,290,"GFN98"],["Nylon","PA-GF (Nylon Glass Fiber)","PA-GF",260,290,"GFN98"],["Nylon","PA6-GF","PA6-GF",260,290,"GFN98"],["Nylon","PAHT-CF","PAHT-CF",260,290,"GFN98"],["Nylon","PPA-CF","PPA-CF",280,300,"GFN98"],["Nylon","PPA-GF","PPA-GF",280,300,"GFN98"],["Flexible","TPU 95A","TPU",200,240,"GFU99"],["Flexible","TPU 90A","TPU",200,230,"GFU99"],["Flexible","TPU 85A","TPU",200,230,"GFU99"],["Flexible","TPU 68D (Firm)","TPU",210,240,"GFU99"],["Flexible","TPU for AMS","TPU",220,240,"GFU99"],["Flexible","TPE","TPU",200,230,"GFU99"],["Flexible","TPC / Flex Co-polyester","TPU",210,240,"GFU99"],["Flexible","SBS","SBS",230,250,"GFG99"],["Engineering","PP (Polypropylene)","PP",220,250,""],["Engineering","PP-CF","PP-CF",230,260,""],["Engineering","PP-GF","PP-GF",230,260,""],["Engineering","PE (Polyethylene)","PE",230,260,""],["Engineering","PE-CF","PE-CF",240,270,""],["Engineering","EVA","EVA",190,220,""],["Engineering","PHA","PHA",190,220,"GFL99"],["Engineering","PVB (Polysmooth)","PVB",200,230,""],["Engineering","POM (Acetal)","POM",210,240,""],["Engineering","PMMA (Acrylic)","PMMA",240,260,""],["Support","PVA (Water Soluble)","PVA",190,230,"GFS99"],["Support","BVOH (Water Soluble)","BVOH",210,240,"GFS99"],["Support","HIPS (Limonene Soluble)","HIPS",230,260,"GFS98"],["Support","Breakaway Support","PLA-S",200,230,"GFL99"]];
 let selSlot = null, jogStep = 10;
-VIEWS.controls = {
-  build(el) {
-    el.innerHTML = `
-    <div class="card"><div class="h">Print speed</div>
-      <div class="seg" id="cSpeed"><button data-v="1">Silent</button><button data-v="2">Standard</button><button data-v="3">Sport</button><button data-v="4">Ludicrous</button></div></div>
-    <div class="card"><div class="h">Temperatures</div>
+const CTL = {
+  speed: `<div class="card"><div class="h">Print speed</div>
+      <div class="seg" id="cSpeed"><button data-v="1">Silent</button><button data-v="2">Standard</button><button data-v="3">Sport</button><button data-v="4">Ludicrous</button></div></div>`,
+  temps: `<div class="card"><div class="h">Temperatures</div>
       ${["nozzle", "bed"].map(t => `<div class="row" style="margin-bottom:10px"><div class="grow"><div style="font-weight:600">${t === "nozzle" ? "Nozzle" : "Bed"}</div>
         <div class="mu sm num" id="cT_${t}">--</div></div>
         <button class="btn sm" data-t="${t}" data-d="-5">−5</button><input type="number" id="cIn_${t}" style="width:76px" min="0"${t === "nozzle" ? ' max="300"' : ""}>
         <button class="btn sm" data-t="${t}" data-d="5">+5</button><button class="btn sm pri" data-t="${t}" data-set="1">Set</button></div>`).join("")}
-      <div class="row w ro-hide"><button class="btn sm" data-pre="220,60">PLA</button><button class="btn sm" data-pre="240,70">PETG</button><button class="btn sm" data-pre="260,90">ABS</button><button class="btn sm" data-pre="225,45">TPU</button><button class="btn sm bad" data-pre="0,0">Cool down</button></div></div>
-    <div class="card"><div class="h">Fans</div>
+      <div class="row w ro-hide"><button class="btn sm" data-pre="220,60">PLA</button><button class="btn sm" data-pre="240,70">PETG</button><button class="btn sm" data-pre="260,90">ABS</button><button class="btn sm" data-pre="225,45">TPU</button><button class="btn sm bad" data-pre="0,0">Cool down</button></div></div>`,
+  fans: `<div class="card"><div class="h">Fans</div>
       ${[["part", "Part cooling"], ["aux", "Aux"], ["chamber", "Chamber"]].map(([k, n]) => `<div style="margin-bottom:8px"><div class="row"><span class="grow">${n}</span><span class="num mu" id="cF_${k}">--</span></div>
-        <input type="range" min="0" max="100" step="10" id="cR_${k}" data-fan="${k}"></div>`).join("")}</div>
-    <div class="card"><div class="row"><div class="h grow" style="margin:0">AMS</div><span class="mu sm" id="cAmsInfo"></span></div>
-      <div class="slots" id="cSlots" style="margin-top:12px"></div>
-      <div id="cSlotAct" class="row w hide" style="margin-top:12px"></div>
-      <div class="row w" style="margin-top:12px"><button class="btn sm" id="cUnload">Unload</button><button class="btn sm" id="cExt">Load external spool</button>
-        <button class="btn sm" id="cAmsRetry">Retry after AMS error</button></div>
-      <div class="div"></div>
+        <input type="range" min="0" max="100" step="10" id="cR_${k}" data-fan="${k}"></div>`).join("")}</div>`,
+  amsopts: `<div class="card"><div class="h">AMS options</div>
       ${[["startup_read", "Read RFID at power-on"], ["tray_read", "Read RFID when a spool is inserted"], ["remain_calc", "Estimate remaining filament"]].map(([k, n]) =>
         `<div class="row" style="padding:4px 0"><span class="grow">${n}</span><label class="sw"><input type="checkbox" data-amsopt="${k}"><span></span></label></div>`).join("")}
-      <div class="mu sm" style="margin-top:8px">Drying can only be started from the printer's screen.</div></div>
-    <div class="card ro-hide"><div class="h">Move</div>
+      <div class="mu sm" style="margin-top:8px">Drying can only be started from the printer's screen.</div></div>`,
+  move: `<div class="card ro-hide"><div class="h">Move</div>
       <div class="mu sm" id="cMoveLock" style="margin-bottom:10px"></div>
       <div class="row w" style="gap:18px;align-items:flex-start">
         <div class="pad">${["", "Y+", "", "X-", "home", "X+", "", "Y-", ""].map(k => k ? `<button class="btn" data-jog="${k}">${k === "home" ? "⌂" : k}</button>` : "<span></span>").join("")}</div>
         <div style="display:grid;gap:6px"><button class="btn" data-jog="Z-" style="min-width:80px">Bed ↑</button><button class="btn" data-jog="Z+">Bed ↓</button></div>
         <div style="display:grid;gap:6px"><div class="mu sm">Step (mm)</div><div class="seg" id="cStep"><button data-v="1">1</button><button data-v="10">10</button><button data-v="50">50</button></div>
           <button class="btn sm" id="cMotors">Motors off</button>
-          <div class="row"><button class="btn sm" data-ex="10">Extrude 10</button><button class="btn sm" data-ex="-10">Retract 10</button></div></div></div></div>
-    <div class="card ro-hide"><div class="h">G-code console</div><textarea id="cG" placeholder="M105"></textarea>
-      <div class="row" style="margin-top:8px"><span class="mu sm grow">Moves are refused while printing.</span><button class="btn sm pri" id="cGo">Send</button></div></div>
-    <div class="card"><div class="h">Printer options</div>
+          <div class="row"><button class="btn sm" data-ex="10">Extrude 10</button><button class="btn sm" data-ex="-10">Retract 10</button></div></div></div></div>`,
+  gcode: `<div class="card ro-hide"><div class="h">G-code console</div><textarea id="cG" placeholder="M105"></textarea>
+      <div class="row" style="margin-top:8px"><span class="mu sm grow">Moves are refused while printing.</span><button class="btn sm pri" id="cGo">Send</button></div></div>`,
+  options: `<div class="card"><div class="h">Printer options</div>
       <div class="row" style="padding:4px 0"><span class="grow">Auto-recover from step loss</span><label class="sw"><input type="checkbox" data-opt="auto_recovery"><span></span></label></div>
-      <div class="row" style="padding:4px 0"><span class="grow">AMS auto-refill</span><label class="sw"><input type="checkbox" data-opt="auto_switch_filament"><span></span></label></div></div>
-    <div class="card ro-hide"><div class="h">Calibration</div>
+      <div class="row" style="padding:4px 0"><span class="grow">AMS auto-refill</span><label class="sw"><input type="checkbox" data-opt="auto_switch_filament"><span></span></label></div></div>`,
+  calib: `<div class="card ro-hide"><div class="h">Calibration</div>
       <label class="ck"><input type="checkbox" id="cbBed" checked>Bed leveling</label><label class="ck"><input type="checkbox" id="cbVib" checked>Vibration compensation</label>
       <label class="ck"><input type="checkbox" id="cbMot">Motor noise cancellation</label>
-      <button class="btn sm pri" id="cCal" style="margin-top:8px">Start calibration</button></div>
-    <div class="card"><div class="row"><div class="h grow" style="margin:0">Clear-plate check</div><span class="chip" id="pcChip">-</span></div>
+      <button class="btn sm pri" id="cCal" style="margin-top:8px">Start calibration</button></div>`,
+  plate: `<div class="card"><div class="row"><div class="h grow" style="margin:0">Clear-plate check</div><span class="chip" id="pcChip">-</span></div>
       <div class="mu sm" style="margin:8px 0 10px">When a print starts, the Pi looks at the bed and sends a phone notification if something may still be on it. It learns your clear plate from the examples below.</div>
       <div class="row" style="align-items:flex-start;gap:12px"><img id="pcImg" alt="" style="width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:var(--s2)">
         <div class="grow sm" id="pcTxt" style="line-height:1.6"></div></div>
       <div class="row w" style="margin-top:10px;gap:6px"><button class="btn sm" id="pcYes">It was clear</button><button class="btn sm" id="pcNo">It wasn't clear</button><button class="btn sm pri" id="pcNow">Plate is clear now, save it</button></div>
       <div class="row" style="margin-top:12px"><span class="grow">Check the plate when a print starts</span><label class="sw"><input type="checkbox" id="pcOn"><span></span></label></div>
-      <div class="row" style="margin-top:8px"><span class="grow">Also pause the print if it's not clear</span><label class="sw"><input type="checkbox" id="pcPause"><span></span></label></div></div>
-    <div class="card"><div class="h">Printer info</div><div id="cInfo" class="sm" style="line-height:1.8"></div></div>
-    <div class="card"><div class="h">Firmware and serial numbers</div><div id="cDev"></div></div>`;
+      <div class="row" style="margin-top:8px"><span class="grow">Also pause the print if it's not clear</span><label class="sw"><input type="checkbox" id="pcPause"><span></span></label></div></div>`,
+  info: `<div class="card"><div class="h">Printer info</div><div id="cInfo"></div></div>`,
+  firmware: `<div class="card"><div class="h">Firmware and serial numbers</div><div id="cDev"></div></div>`
+};
+VIEWS.controls = {
+  build(el, secs) {
+    secs = secs || ["speed", "temps", "fans", "move", "gcode", "options"];
+    el.innerHTML = secs.map(k => CTL[k]).join("\n");
+    const on = (sel, ev, fn) => { const e = $(sel); if (e) e[ev] = fn; };
     el.querySelectorAll("#cSpeed button").forEach(b => b.onclick = () => { paintSeg("#cSpeed", b.dataset.v); cmd("speed", {level: +b.dataset.v}, "Speed: " + b.textContent); });
     el.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
       const t = b.dataset.t, inp = $("#cIn_" + t);
@@ -797,9 +843,9 @@ VIEWS.controls = {
       await cmd("temp", {target: "nozzle", value: n}, "Sent"); busy = false; await cmd("temp", {target: "bed", value: bd}, b.textContent + ": " + n + "° / " + bd + "°");
     });
     el.querySelectorAll("[data-fan]").forEach(r => { r.oninput = () => $("#cF_" + r.dataset.fan).textContent = r.value + "%"; r.onchange = () => { r.dataset.touched = ""; busy = false; cmd("fan", {fan: r.dataset.fan, percent: +r.value}, "Fan set to " + r.value + "%"); }; r.onpointerdown = () => r.dataset.touched = "1"; });
-    $("#cUnload").onclick = () => confirmBox("Unload filament?", "The printer will cut and pull back the current filament.", "Unload", () => cmd("ams_unload", null, "Unloading..."));
-    $("#cExt").onclick = () => cmd("ams_load", {tray: 254}, "Loading external spool...");
-    $("#cAmsRetry").onclick = () => cmd("ams_resume", null, "Retrying AMS...");
+    if ($("#cUnload")) $("#cUnload").onclick = () => confirmBox("Unload filament?", "The printer will cut and pull back the current filament.", "Unload", () => cmd("ams_unload", null, "Unloading..."));
+    if ($("#cExt")) $("#cExt").onclick = () => cmd("ams_load", {tray: 254}, "Loading external spool...");
+    if ($("#cAmsRetry")) $("#cAmsRetry").onclick = () => cmd("ams_resume", null, "Retrying AMS...");
     el.querySelectorAll("[data-amsopt]").forEach(c => c.onchange = () => {
       const g = k => $(`[data-amsopt=${k}]`).checked;
       cmd("ams_options", {startup_read: g("startup_read"), tray_read: g("tray_read"), remain_calc: g("remain_calc")}, "AMS setting saved");
@@ -811,11 +857,11 @@ VIEWS.controls = {
       if (k === "home") return cmd("home", null, "Homing...");
       busy = false; cmd("jog", {axis: k[0], mm: (k[1] === "-" ? -1 : 1) * jogStep}, k[0] + " " + k[1] + jogStep + " mm");
     });
-    $("#cMotors").onclick = () => cmd("motors_off", null, "Motors off");
+    if ($("#cMotors")) $("#cMotors").onclick = () => cmd("motors_off", null, "Motors off");
     el.querySelectorAll("[data-ex]").forEach(b => b.onclick = () => cmd("extrude", {mm: +b.dataset.ex}, b.textContent));
-    $("#cGo").onclick = () => { const g = $("#cG").value.trim(); if (g) cmd("gcode", {gcode: g}, "G-code sent"); };
+    if ($("#cGo")) $("#cGo").onclick = () => { const g = $("#cG").value.trim(); if (g) cmd("gcode", {gcode: g}, "G-code sent"); };
     el.querySelectorAll("[data-opt]").forEach(c => c.onchange = () => cmd("option", {name: c.dataset.opt, value: c.checked}, "Option saved"));
-    $("#cCal").onclick = () => {
+    if ($("#cCal")) $("#cCal").onclick = () => {
       const bed = $("#cbBed").checked, vibration = $("#cbVib").checked, motor = $("#cbMot").checked;
       confirmBox("Start calibration?", "The printer will move and heat up. Takes several minutes.", "Start", () => cmd("calibrate", {bed, vibration, motor}, "Calibration started"));
     };
@@ -824,28 +870,29 @@ VIEWS.controls = {
     const p = s.printer;
     if (p.speed_level) paintSeg("#cSpeed", p.speed_level);
     for (const t of ["nozzle", "bed"]) {
+      if (!$("#cT_" + t)) break;
       $("#cT_" + t).textContent = deg(p[t], p[t + "_target"]);
       const inp = $("#cIn_" + t);
       if (!inp.dataset.touched && document.activeElement !== inp) inp.value = Math.round(p[t + "_target"] || 0);
     }
     for (const k of ["part", "aux", "chamber"]) {
       const v = p.fans ? p.fans[k] : null, r = $("#cR_" + k);
-      if (!r.dataset.touched) { r.value = v || 0; $("#cF_" + k).textContent = v == null ? "--" : v + "%"; }
+      if (r && !r.dataset.touched) { r.value = v || 0; $("#cF_" + k).textContent = v == null ? "--" : v + "%"; }
     }
     const a = p.ams || {}, units = a.units || [];
-    $("#cAmsInfo").textContent = units.map(u => `AMS ${u.unit}: ${u.temp != null ? Math.round(u.temp) + "° · " : ""}${u.humidity_pct != null ? u.humidity_pct + "% RH" : u.humidity_level != null ? "humidity " + u.humidity_level + "/5" : ""}${u.drying ? " · drying, " + u.dry_min_left + " min left" : ""}`).join("   ");
+    if ($("#cAmsInfo")) $("#cAmsInfo").textContent = units.map(u => `AMS ${u.unit}: ${u.temp != null ? Math.round(u.temp) + "° · " : ""}${u.humidity_pct != null ? u.humidity_pct + "% RH" : u.humidity_level != null ? "humidity " + u.humidity_level + "/5" : ""}${u.drying ? " · drying, " + u.dry_min_left + " min left" : ""}`).join("   ");
     const trays = a.trays || [];
-    $("#cSlots").innerHTML = trays.length ? trays.map(t => `<button class="slot${t.active ? " on" : ""}${selSlot === t.slot ? " sel" : ""}" data-slot="${t.slot}">
+    if ($("#cSlots")) $("#cSlots").innerHTML = trays.length ? trays.map(t => `<button class="slot${t.active ? " on" : ""}${selSlot === t.slot ? " sel" : ""}" data-slot="${t.slot}">
         <span class="dot" style="background:${t.color || "transparent"}"></span><div style="font-weight:600;margin-top:6px">${t.empty ? "Empty" : esc(t.type)}</div>
         <div class="fa sm">${t.unit}·${t.tray}${t.remain != null && t.remain >= 0 && !t.empty ? " · " + t.remain + "%" : ""}</div></button>`).join("")
       : '<div class="mu sm">No AMS found.</div>';
-    $("#cSlots").querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { selSlot = +b.dataset.slot; slotActions(trays.find(t => t.slot === selSlot)); VIEWS.controls.update(status); });
+    if ($("#cSlots")) $("#cSlots").querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { selSlot = +b.dataset.slot; slotActions(trays.find(t => t.slot === selSlot)); VIEWS.controls.update(status); });
     const opt = p.options || {};
     for (const k of ["startup_read", "tray_read", "remain_calc"]) { const c = $(`[data-amsopt=${k}]`); if (c && document.activeElement !== c) c.checked = !!opt["ams_" + k]; }
     for (const k of ["auto_recovery", "auto_switch_filament"]) { const c = $(`[data-opt=${k}]`); if (c) c.checked = !!opt[k]; }
-    $("#cMoveLock").textContent = p.busy ? "Moving is locked while a print is running or paused." : "";
+    if ($("#cMoveLock")) $("#cMoveLock").textContent = p.busy ? "Moving is locked while a print is running or paused." : "";
     document.querySelectorAll("[data-jog],#cMotors,[data-ex]").forEach(b => b.disabled = !!p.busy);
-    $("#cCal").disabled = !!p.busy;
+    if ($("#cCal")) $("#cCal").disabled = !!p.busy;
     const hms = p.hms || [];
     const pc = (status && status.plate) || {};
     if ($("#pcChip")) {
@@ -870,16 +917,26 @@ VIEWS.controls = {
     const dv = (status && status.device) || {};
     const spools = b => { const n = parseInt(b || "0", 16); if (isNaN(n)) return "-"; const l = []; for (let i = 0; i < 16; i++) if (n & (1 << i)) l.push(`${(i >> 2) + 1}·${(i & 3) + 1}`); return l.join(", ") || "none"; };
     const err = p.print_error ? (p.print_error >>> 0).toString(16).toUpperCase().padStart(8, "0") : "";
-    $("#cInfo").innerHTML = `Stage: ${esc(p.stage || "-")}${dv.prepare_pct != null ? " (file " + dv.prepare_pct + "%)" : ""}<br>
-      ${dv.ams_step ? "AMS: " + esc(dv.ams_step) + "<br>" : ""}
-      ${dv.gcode_line ? "G-code line: " + dv.gcode_line.toLocaleString() + "<br>" : ""}
-      ${dv.hub ? `AMS hub: ${dv.hub.ahb ? "online" : "not seen"} · RFID reader: ${dv.hub.rfid ? "online" : "not seen"} · units: ${dv.hub.units} · spools in: ${spools(dv.hub.spools_bits)}${dv.hub.reading_bits && dv.hub.reading_bits !== "0" ? " · reading RFID" : ""}<br>` : ""}
-      ${err ? `<span style="color:var(--bad)">Print error ${err.slice(0, 4)}_${err.slice(4)}</span><br>` : ""}Speed: ${esc(p.speed_name || "-")}${p.speed_pct ? " (" + p.speed_pct + "%)" : ""}<br>
-      Wi-Fi: ${esc(p.wifi || "-")} · Nozzle: ${esc(p.nozzle_diameter || "-")} mm · SD card: ${esc(opt.sdcard || "-")}
-      ${hms.length ? "<br><span style='color:var(--bad)'>Printer alerts:</span> " + hms.map(h => { const c = h.replace("HMS_", ""); const seg = c.length === 17 ? c.slice(0, 4) + "_" + c.slice(4, 8) + "_" + c.slice(9, 13) + "_" + c.slice(13) : c;
-        return `<a href="https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/${seg}" target="_blank" rel="noopener noreferrer">${esc(h)}</a>`; }).join(", ") : ""}`;
+    if ($("#cInfo")) {
+      const kv = [
+        ["Stage", esc(p.stage || "-") + (dv.prepare_pct != null ? " (file " + dv.prepare_pct + "%)" : "")],
+        ["Speed", esc(p.speed_name || "-") + (p.speed_pct ? " (" + p.speed_pct + "%)" : "")],
+        dv.gcode_line ? ["G-code line", dv.gcode_line.toLocaleString()] : null,
+        ["AMS", esc(dv.ams_step || "-")],
+        dv.hub ? ["AMS hub", `${dv.hub.ahb ? "online" : "not seen"} · RFID reader ${dv.hub.rfid ? "online" : "not seen"} · ${dv.hub.units} unit${dv.hub.units === 1 ? "" : "s"}`] : null,
+        dv.hub ? ["Spools in", spools(dv.hub.spools_bits) + (dv.hub.reading_bits && dv.hub.reading_bits !== "0" ? " · reading RFID" : "")] : null,
+        p.fans ? ["Fans", `part ${p.fans.part ?? "-"}% · aux ${p.fans.aux ?? "-"}% · chamber ${p.fans.chamber ?? "-"}% · heatbreak ${p.fans.heatbreak ?? "-"}%`] : null,
+        ["Nozzle", esc(p.nozzle_diameter || "-") + " mm"],
+        ["Wi-Fi", esc(p.wifi || "-")],
+        ["SD card", esc(opt.sdcard || "-")],
+        err ? ["Print error", `<span style="color:var(--bad)">${err.slice(0, 4)}_${err.slice(4)}</span>`] : null,
+        hms.length ? ["Alerts", hms.map(h => { const c = h.replace("HMS_", ""); const seg = c.length === 17 ? c.slice(0, 4) + "_" + c.slice(4, 8) + "_" + c.slice(9, 13) + "_" + c.slice(13) : c;
+          return `<a href="https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/${seg}" target="_blank" rel="noopener noreferrer">${esc(h)}</a>`; }).join(", ")] : null,
+      ].filter(Boolean);
+      $("#cInfo").innerHTML = `<dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+    }
     const mods = dv.modules || [];
-    $("#cDev").innerHTML = (dv.updates && dv.updates.length ? `<div style="color:var(--ac);margin-bottom:8px">Firmware update available: ${dv.updates.map(u => esc(u.name) + " " + esc(u.cur) + " → " + esc(u.new)).join(", ")}</div>` : "")
+    if ($("#cDev")) $("#cDev").innerHTML = (dv.updates && dv.updates.length ? `<div style="color:var(--ac);margin-bottom:8px">Firmware update available: ${dv.updates.map(u => esc(u.name) + " " + esc(u.cur) + " → " + esc(u.new)).join(", ")}</div>` : "")
       + (mods.length ? `<div class="list">${mods.map(m => `<div><div class="grow"><div style="font-weight:600">${esc(m.name)}</div><div class="fa sm">SN ${esc(m.sn || "-")}</div></div><span class="num sm">${esc(m.sw || "-")}</span></div>`).join("")}</div>`
         : '<div class="mu sm">Asking the printer...</div>');
   }
@@ -1092,8 +1149,8 @@ VIEWS.print = {
       const files = Array.isArray(j) ? j : j.list || [];
       $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=1&path=${encodeURIComponent(f.path)}" onerror="this.style.visibility='hidden'"><div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(f.title)}">${esc(f.title)}</div>
         <div class="fa sm">${esc(f.date || "")} · ${(f.size / 1e6).toFixed(1)} MB</div></div>
-        <a class="btn sm" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download style="margin:0 6px 0 10px;flex:none">Download</a>
-        <button class="btn sm bad" data-del="${i}" style="margin-right:6px;flex:none">Delete</button><span class="fa">›</span></div>`).join("") : '<div class="mu">No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer.</div>';
+        <a class="btn sm icon" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download title="Download" aria-label="Download">${IC.dl}</a>
+        <button class="btn sm bad icon" data-del="${i}" title="Delete" aria-label="Delete">${IC.trash}</button><span class="fa">›</span></div>`).join("") : '<div class="mu">No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer.</div>';
       $("#pList").querySelectorAll("[data-i]").forEach(r => r.onclick = () => this.open(files[+r.dataset.i]));
       $("#pList").querySelectorAll("[data-dl]").forEach(a => a.onclick = e => e.stopPropagation());
       $("#pList").querySelectorAll("[data-del]").forEach(b => b.onclick = e => {
@@ -1181,7 +1238,7 @@ VIEWS.print = {
           const body = {path: f.path, plate: plate.index, use_ams: !useExt, ams_mapping: useExt ? [] : arr, timelapse: $("#oTl").checked,
             bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked, speed: +$("#oSpd").value};
           confirmBox("Start this print?", f.title + " · plate " + plate.index + (useExt ? "\nFrom the external spool." : ""), "Start", async () => {
-            try { await api("/api/print", body); toast("Print started"); tab = "watch"; renderTabs(); } catch (e) { toast(e.message); }
+            try { await api("/api/print", body); toast("Print started"); renderTabs(); } catch (e) { toast(e.message); }
           });
         };
       };
@@ -1302,12 +1359,12 @@ VIEWS.timelapses = {
           : x.rendering ? `<div style="min-width:220px"><div class="row" style="gap:8px"><span class="sm grow" style="color:var(--ac)">Making video ${x.progress ? x.progress.pct.toFixed(0) + "%" : "..."}</span><span class="fa sm">${x.progress && x.progress.eta_s != null ? "~" + (x.progress.eta_s >= 3600 ? Math.floor(x.progress.eta_s / 3600) + "h " : "") + Math.round(x.progress.eta_s % 3600 / 60) + "m left" : ""}</span></div>
               <div class="bar" style="height:6px;margin-top:6px"><i style="width:${x.progress ? x.progress.pct : 0}%;background:var(--ac)"></i></div></div>` : x.queued ? '<span class="chip">Queued</span>'
           : `<button class="btn sm pri" data-mk="${esc(x.id)}">Make video</button>`;
-        return `<div><img class="thumb" loading="lazy" src="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/thumb.jpg" onerror="this.style.visibility='hidden'">
+        return `<div style="flex-wrap:wrap"><img class="thumb" loading="lazy" src="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/thumb.jpg" onerror="this.style.visibility='hidden'">
           <div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}</div>
-          <div class="fa sm">${when} · ${x.frames} layers${x.mb ? " · " + x.mb + " MB" : ""}</div></div><div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;flex:none;max-width:60%">${btn.replace(/ style="margin-right:6px"/g, "")}</div></div>`; }).join("")
+          <div class="fa sm">${when} · ${x.frames} layers${x.mb ? " · " + x.mb + " MB" : ""}</div></div><div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:96px">${btn.replace(/ style="margin-right:6px"/g, "")}</div></div>`; }).join("")
         : '<div class="mu">None yet. The Pi records one frame per layer of every print.</div>';
       $("#tPi").querySelectorAll("[data-mk]").forEach(b => b.onclick = async () => { try { await api("/api/timelapse/" + encodeURIComponent(b.dataset.mk) + "/render", {}); toast("Making the video..."); this.loadPi(); } catch (e) { toast(e.message); } });
-      if (busy && tab === "timelapses") this.piT = setTimeout(() => this.loadPi(), 4000);
+      if (busy && $("#tPi")) this.piT = setTimeout(() => this.loadPi(), 4000);
     } catch (e) { $("#tPi").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
   },
   async load(refresh) {
@@ -1370,7 +1427,7 @@ VIEWS.train = {
       $("#trInfo").textContent = txt;
       $("#trState").textContent = s.running ? "Training..." : s.error ? "Error: " + s.error : r && r.trained_at ? "Last run " + new Date(r.trained_at * 1000).toLocaleString() : "";
       $("#trNow").disabled = !!s.running;
-      if (s.running) setTimeout(() => tab === "train" && this.loadModel(), 2000);
+      if (s.running) setTimeout(() => $("#trInfo") && this.loadModel(), 2000);
     } catch (e) { $("#trInfo").textContent = e.message; }
   },
   async loadList() {
@@ -1417,7 +1474,7 @@ const FLOW = [["p1s", "Pi ↔ P1S (MQTT)"], ["uno", "Pi ↔ Arduino (bed relay)"
 VIEWS.flow = {
   seq: 0, lines: {p1s: [], uno: [], web: []}, paused: false, timer: null, hide: {}, filter: "",
   build(el) {
-    el.innerHTML = `<div class="card"><div class="row"><div class="grow mu sm">Live traffic through the Pi, newest at the bottom. <span style="color:var(--ok)">Green</span> = into the Pi, <span style="color:var(--ac)">amber</span> = out of the Pi.</div></div>
+    el.innerHTML = `<div class="card"><div class="h">Data flow</div><div class="row"><div class="grow mu sm">Live traffic through the Pi, newest at the bottom. <span style="color:var(--ok)">Green</span> = into the Pi, <span style="color:var(--ac)">amber</span> = out of the Pi.</div></div>
       <div class="row" style="margin-top:10px;gap:6px"><input id="flF" placeholder="Filter (e.g. gcode_state, ams, temp)" class="grow"><button class="btn sm" id="flP">Pause</button><button class="btn sm" id="flC">Clear</button></div></div>
       ${FLOW.map(([k, t]) => `<div class="card"><div class="row" style="cursor:pointer" data-fh="${k}"><div class="h grow" style="margin:0">${t}</div><span class="chip" id="flN-${k}">0</span></div>
         <pre id="flB-${k}" class="flow"></pre></div>`).join("")}`;
@@ -1431,7 +1488,7 @@ VIEWS.flow = {
   },
   async poll() {
     clearTimeout(this.timer);
-    if (tab !== "flow") return;
+    if (!$("#flB-p1s")) return;
     try {
       const j = await api("/api/streams?since=" + this.seq);
       this.seq = j.seq || this.seq;
@@ -1452,6 +1509,14 @@ VIEWS.flow = {
     }
   }
 };
+
+// ---------- the tabs
+VIEWS.control = compose(["controls", ["speed", "temps", "fans"]], ["controls", ["move", "options", "calib"], () => !readOnly], ["controls", ["gcode"], () => role === "master" && !readOnly]);
+VIEWS.printtab = compose(["job", null, printing], ["print"]);
+VIEWS.amstab = compose(["ams"], ["controls", ["amsopts"]]);
+VIEWS.safety = compose(["watch"], ["controls", ["plate"]], ["train"]);
+VIEWS.videos = compose(["timelapses"], ["history"]);
+VIEWS.printer = compose(["controls", ["info"]], ["activity", null, () => !readOnly], ["controls", ["firmware"], () => !readOnly], ["flow", null, () => role === "master" && !readOnly]);
 
 // ---------- Command center (master code only)
 VIEWS.admin = {
