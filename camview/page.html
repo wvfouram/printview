@@ -25,6 +25,7 @@ header h1:before{content:"";width:10px;height:10px;border-radius:3px;background:
 .grid>*{min-width:0}
 @media(min-width:960px){.grid.unlocked{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}.grid.unlocked .camcol{position:sticky;top:16px}}
 .camcol>.card{margin-top:12px}
+.offmsg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;background:#000c;color:var(--tx);font-size:clamp(20px,4vw,34px);font-weight:700;letter-spacing:-.01em;z-index:1}
 #views>div>div+div{margin-top:12px}
 .btn.icon{width:36px;padding:0;flex:none}.btn.icon svg{width:17px;height:17px}
 .tabs button{padding:8px 11px;font-size:14px;flex:1 0 auto}
@@ -152,6 +153,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
       <div class="cam" id="cam">
         <img id="img" alt="Printer camera">
         <div class="scrim"></div>
+        <div class="offmsg hide" id="offMsg">Parents removed power cord</div>
         <div class="pill" id="state">CONNECTING</div>
         <div class="pill hide" id="live">● LIVE</div>
         <div class="cambtns">
@@ -657,6 +659,7 @@ function render() {
   const s = status, p = s.printer, cm = s.camera;
   const st = STATES[p.state] || [p.state, "#8d929b"];
   $("#state").textContent = p.connected ? "● " + st[0] : "● PRINTER OFFLINE";
+  $("#offMsg").classList.toggle("hide", !!p.connected);
   $("#state").style.color = p.connected ? st[1] : "var(--bad)";
   $("#conn").textContent = p.connected && cm.connected ? "● Connected" : "● " + (!p.connected ? "Printer offline" : "Camera offline");
   $("#conn").style.color = p.connected && cm.connected ? "var(--ok)" : "var(--bad)";
