@@ -778,6 +778,8 @@ VIEWS.activity = {
     }).join("") : '<div class="mu" style="padding-top:8px">Nothing yet.</div>';
   }
 };
+// AMS HT reports itself as unit 128+ (shown by the printer as AMS 129); give it its real name
+function amsName(u) { const n = +u; return n >= 128 ? "AMS HT" + (n > 129 ? " " + (n - 128) : "") : u === "HT" ? "AMS HT" : "AMS " + u; }
 function paintSeg(sel, v) { document.querySelectorAll(sel + " button").forEach(b => b.classList.toggle("on", b.dataset.v == String(v))); }
 
 // ---------- Controls
@@ -880,7 +882,7 @@ VIEWS.controls = {
       if (r && !r.dataset.touched) { r.value = v || 0; $("#cF_" + k).textContent = v == null ? "--" : v + "%"; }
     }
     const a = p.ams || {}, units = a.units || [];
-    if ($("#cAmsInfo")) $("#cAmsInfo").textContent = units.map(u => `AMS ${u.unit}: ${u.temp != null ? Math.round(u.temp) + "° · " : ""}${u.humidity_pct != null ? u.humidity_pct + "% RH" : u.humidity_level != null ? "humidity " + u.humidity_level + "/5" : ""}${u.drying ? " · drying, " + u.dry_min_left + " min left" : ""}`).join("   ");
+    if ($("#cAmsInfo")) $("#cAmsInfo").textContent = units.map(u => `${amsName(u.unit)}: ${u.temp != null ? Math.round(u.temp) + "° · " : ""}${u.humidity_pct != null ? u.humidity_pct + "% RH" : u.humidity_level != null ? "humidity " + u.humidity_level + "/5" : ""}${u.drying ? " · drying, " + u.dry_min_left + " min left" : ""}`).join("   ");
     const trays = a.trays || [];
     if ($("#cSlots")) $("#cSlots").innerHTML = trays.length ? trays.map(t => `<button class="slot${t.active ? " on" : ""}${selSlot === t.slot ? " sel" : ""}" data-slot="${t.slot}">
         <span class="dot" style="background:${t.color || "transparent"}"></span><div style="font-weight:600;margin-top:6px">${t.empty ? "Empty" : esc(t.type)}</div>
@@ -923,7 +925,7 @@ VIEWS.controls = {
         ["Speed", esc(p.speed_name || "-") + (p.speed_pct ? " (" + p.speed_pct + "%)" : "")],
         dv.gcode_line ? ["G-code line", dv.gcode_line.toLocaleString()] : null,
         ["AMS", esc(dv.ams_step || "-")],
-        dv.hub ? ["AMS hub", `${dv.hub.ahb ? "online" : "not seen"} · RFID reader ${dv.hub.rfid ? "online" : "not seen"} · ${dv.hub.units} unit${dv.hub.units === 1 ? "" : "s"}`] : null,
+        (p.ams && (p.ams.units || []).length) ? ["AMS units", (p.ams.units || []).map(u => amsName(u.unit)).join(", ") + " connected"] : null,
         dv.hub ? ["Spools in", spools(dv.hub.spools_bits) + (dv.hub.reading_bits && dv.hub.reading_bits !== "0" ? " · reading RFID" : "")] : null,
         p.fans ? ["Fans", `part ${p.fans.part ?? "-"}% · aux ${p.fans.aux ?? "-"}% · chamber ${p.fans.chamber ?? "-"}% · heatbreak ${p.fans.heatbreak ?? "-"}%`] : null,
         ["Nozzle", esc(p.nozzle_diameter || "-") + " mm"],
@@ -945,9 +947,9 @@ function slotActions(t) {
   const el = $("#cSlotAct");
   if (!t) { el.classList.add("hide"); return; }
   el.classList.remove("hide");
-  el.innerHTML = `<span class="mu sm grow">AMS ${t.unit} · slot ${t.tray}${t.empty ? "" : " · " + esc(t.type)}</span>
+  el.innerHTML = `<span class="mu sm grow">${amsName(t.unit)} · slot ${t.tray}${t.empty ? "" : " · " + esc(t.type)}</span>
     <button class="btn sm pri" id="sLoad">Load</button><button class="btn sm" id="sEdit">Set filament</button><button class="btn sm" id="sPa">K${t.k != null && t.k >= 0 ? " " + t.k.toFixed(3) : ""}</button><button class="btn sm" id="sRfid">Re-read RFID</button>`;
-  $("#sLoad").onclick = () => confirmBox("Load this slot?", `AMS ${t.unit} · slot ${t.tray}`, "Load", () => cmd("ams_load", {tray: t.slot}, "Loading..."));
+  $("#sLoad").onclick = () => confirmBox("Load this slot?", `${amsName(t.unit)} · slot ${t.tray}`, "Load", () => cmd("ams_load", {tray: t.slot}, "Loading..."));
   $("#sRfid").onclick = () => cmd("ams_rfid", {slot: t.slot}, "Reading RFID...");
   $("#sEdit").onclick = () => editSlot(t);
   $("#sPa").onclick = () => paDialog(t);
@@ -955,7 +957,7 @@ function slotActions(t) {
 
 // Pressure advance: type a K you already know, it's saved on the printer and assigned to the slot.
 async function paDialog(t) {
-  const d = $("#dlg"), where = t.slot === 254 ? "external spool" : `AMS ${t.unit} · slot ${t.tray}`;
+  const d = $("#dlg"), where = t.slot === 254 ? "external spool" : `${amsName(t.unit)} · slot ${t.tray}`;
   const cur = t.k != null && t.k >= 0 ? t.k.toFixed(3) : "";
   $("#dlgBody").innerHTML = `<div style="font-size:18px;font-weight:650;margin-bottom:6px">Pressure advance · ${esc(where)}</div>
     <div class="mu sm" style="margin-bottom:12px">${esc(t.type || "No material set")} · current K ${cur || "not reported"}</div>
@@ -987,7 +989,7 @@ function editSlot(t) {
   const d = $("#dlg"), cur = String(t.type || "").trim();
   let sel = cur ? -1 : 0;
   for (let i = FILAMENTS.length - 1; i >= 0; i--) if (FILAMENTS[i][2].toUpperCase() === cur.toUpperCase()) sel = i;
-  $("#dlgBody").innerHTML = `<div style="font-size:18px;font-weight:650;margin-bottom:14px">${t.slot === 254 ? "External spool" : `AMS ${t.unit} · slot ${t.tray}`}</div>
+  $("#dlgBody").innerHTML = `<div style="font-size:18px;font-weight:650;margin-bottom:14px">${t.slot === 254 ? "External spool" : `${amsName(t.unit)} · slot ${t.tray}`}</div>
     <input type="text" id="eQ" placeholder="Search materials, e.g. CF, silk, nylon" style="width:100%;margin-bottom:8px">
     <select id="eT" style="width:100%;margin-bottom:8px"></select>
     <input type="text" id="eX" maxlength="16" placeholder="Type name, e.g. PLA-LED" style="width:100%;margin-bottom:8px" class="hide">
@@ -1060,7 +1062,7 @@ VIEWS.ams = {
         ${t.remain != null && t.remain >= 0 && !t.empty ? `<div class="bar" style="height:5px;margin-top:6px;max-width:220px"><i style="width:${t.remain}%;background:${t.remain < 15 ? "var(--bad)" : "var(--ac)"}"></i></div>` : ""}</div>
       <button class="btn sm" data-aload="${t.slot}" ${t.empty || t.active ? "disabled" : ""}>Load</button><button class="btn sm" data-aedit="${t.slot}">Set</button><button class="btn sm" data-apa="${t.slot}" title="Pressure advance">K</button><button class="btn sm" data-arfid="${t.slot}" title="Re-read RFID">RFID</button></div>`;
     let html = units.map(u => `<div class="card">
-        <div class="row"><div style="font-weight:650;font-size:17px" class="grow">AMS ${u.unit}</div>
+        <div class="row"><div style="font-weight:650;font-size:17px" class="grow">${amsName(u.unit)}</div>
           <span class="chip" style="color:${u.drying ? "var(--ac)" : "var(--mu)"}">${u.drying ? "Drying" : "Not drying"}</span></div>
         <div class="stats">
           <div class="stat"><span class="mu sm">Temperature</span><b class="num">${u.temp != null ? Math.round(u.temp) + "°C" : "--"}</b></div>
@@ -1073,7 +1075,7 @@ VIEWS.ams = {
       <button class="btn sm" data-aedit="254">Set</button><button class="btn sm" data-apa="254">K</button></div>` : '<div class="mu">Not reported.</div>'}</div></div>`;
     $("#amsUnits").innerHTML = html;
     const find = slot => slot === 254 ? Object.assign({slot: 254, unit: "ext", tray: "spool", empty: !(ext && ext.type)}, ext || {}) : trays.find(t => t.slot === slot);
-    $("#amsUnits").querySelectorAll("[data-aload]").forEach(b => b.onclick = () => { const t = find(+b.dataset.aload); confirmBox("Load this slot?", `AMS ${t.unit} · slot ${t.tray} · ${t.type}`, "Load", () => cmd("ams_load", {tray: t.slot}, "Loading...")); });
+    $("#amsUnits").querySelectorAll("[data-aload]").forEach(b => b.onclick = () => { const t = find(+b.dataset.aload); confirmBox("Load this slot?", `${amsName(t.unit)} · slot ${t.tray} · ${t.type}`, "Load", () => cmd("ams_load", {tray: t.slot}, "Loading...")); });
     $("#amsUnits").querySelectorAll("[data-arfid]").forEach(b => b.onclick = () => cmd("ams_rfid", {slot: +b.dataset.arfid}, "Reading RFID..."));
     $("#amsUnits").querySelectorAll("[data-aedit]").forEach(b => b.onclick = () => { editSlot(find(+b.dataset.aedit)); });
     $("#amsUnits").querySelectorAll("[data-apa]").forEach(b => b.onclick = () => { paDialog(find(+b.dataset.apa)); });
@@ -1196,7 +1198,7 @@ VIEWS.print = {
           if (bestSlot == null) { const any = trays.find(t => !t.empty); bestSlot = any ? any.slot : 254; }
           return bestSlot;
         };
-        const opts = trays.map(t => `<option value="${t.slot}">AMS ${t.unit}·${t.tray}  ${esc(t.empty ? "empty" : t.type)}</option>`).join("") + `<option value="254">External spool${ext && ext.type ? " " + esc(ext.type) : ""}</option>`;
+        const opts = trays.map(t => `<option value="${t.slot}">${amsName(t.unit)}·${t.tray}  ${esc(t.empty ? "empty" : t.type)}</option>`).join("") + `<option value="254">External spool${ext && ext.type ? " " + esc(ext.type) : ""}</option>`;
         box.innerHTML = `<div class="card"><div class="row" style="align-items:flex-start;gap:14px">
             <img src="${BASE}/api/files/plate.png?path=${encodeURIComponent(f.path)}&plate=${plate.index}" style="width:120px;height:120px;border-radius:14px;background:var(--s2);object-fit:contain">
             <div class="grow"><div style="font-weight:650;font-size:17px">${esc(f.title)}</div>
