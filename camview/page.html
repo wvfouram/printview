@@ -886,7 +886,7 @@ VIEWS.controls = {
     const trays = a.trays || [];
     if ($("#cSlots")) $("#cSlots").innerHTML = trays.length ? trays.map(t => `<button class="slot${t.active ? " on" : ""}${selSlot === t.slot ? " sel" : ""}" data-slot="${t.slot}">
         <span class="dot" style="background:${t.color || "transparent"}"></span><div style="font-weight:600;margin-top:6px">${t.empty ? "Empty" : esc(t.type)}</div>
-        <div class="fa sm">${t.unit}·${t.tray}${t.remain != null && t.remain >= 0 && !t.empty ? " · " + t.remain + "%" : ""}</div></button>`).join("")
+        <div class="fa sm">${+t.unit >= 128 ? "HT" : t.unit}·${t.tray}${t.remain != null && t.remain >= 0 && !t.empty ? " · " + t.remain + "%" : ""}</div></button>`).join("")
       : '<div class="mu sm">No AMS found.</div>';
     if ($("#cSlots")) $("#cSlots").querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { selSlot = +b.dataset.slot; slotActions(trays.find(t => t.slot === selSlot)); VIEWS.controls.update(status); });
     const opt = p.options || {};
