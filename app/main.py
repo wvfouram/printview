@@ -30,6 +30,7 @@ from . import sdcard as sd
 from . import gcode3d
 from .devinfo import DevInfo
 from .platecheck import PlateCheck
+from .usbcam import USBCam
 from . import remote as rm
 from .store import Events, Notifier, Settings
 from .trainer import Trainer
@@ -108,6 +109,7 @@ def build_app():
             app["events"].add("cmd", f"Scheduled print started: {os.path.basename(str(b.get('path')))}")
         return ok
     app["devinfo"] = DevInfo(printer)
+    app["usbcam"] = USBCam()
     app["plate"] = PlateCheck(printer, camera, detector, notifier, events, settings, data_dir)
     app["history"] = History(printer, camera, data_dir, app["timelapse"])
     threading.Thread(target=_weekly_report, args=(app, data_dir), daemon=True, name="report").start()
@@ -133,6 +135,7 @@ def build_app():
     app.router.add_post("/api/cmd", api_cmd)
     app.router.add_post("/api/settings", api_settings)
     app.router.add_get("/snapshot.jpg", snapshot)
+    app.router.add_get("/cam2.jpg", cam2_jpg)
     app.router.add_get("/detection.jpg", detection_jpg)
     app.router.add_get("/stream.mjpg", mjpeg)
     app.router.add_post("/api/pair", api_pair)
@@ -219,7 +222,7 @@ def auth_token(app):
     return hmac.new(app["secret"].encode(), app["pin"].encode(), hashlib.sha256).hexdigest()
 
 
-QUIET = ("/api/streams", "/snapshot.jpg", "/stream.mjpg", "/api/stream")   # not logged: the stream view itself, video
+QUIET = ("/api/streams", "/snapshot.jpg", "/cam2.jpg", "/stream.mjpg", "/api/stream")   # not logged: the stream view itself, video
 
 
 @web.middleware
@@ -322,6 +325,7 @@ def full_status(app):
         "schedule": {"next": app["schedule"].next_up()},
         "device": app["devinfo"].status(),
         "plate": app["plate"].status(),
+        "cam2": app["usbcam"].status(),
     }
 
 
@@ -445,6 +449,23 @@ async def snapshot(request):
         raise web.HTTPNotModified()
     return web.Response(body=frame, content_type="image/jpeg",
                         headers={"Cache-Control": "no-cache", "ETag": etag})
+
+
+async def cam2_jpg(request):
+    """Latest picture from the USB camera (starts it if nobody was watching)."""
+    cam = request.app["usbcam"]
+    frame, fid, t = cam.latest()
+    for _ in range(40):                       # just started: wait up to ~4 s for the first picture
+        if frame and time.time() - t < 10:
+            break
+        await asyncio.sleep(0.1)
+        frame, fid, t = cam.latest()
+    if not frame or time.time() - t > 10:
+        return web.Response(status=503, text=cam.error or "USB camera starting")
+    etag = f'"u{fid}"'
+    if request.headers.get("If-None-Match") == etag:
+        raise web.HTTPNotModified()
+    return web.Response(body=frame, content_type="image/jpeg", headers={"Cache-Control": "no-cache", "ETag": etag})
 
 
 async def detection_jpg(request):

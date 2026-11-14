@@ -457,6 +457,22 @@ public class MainActivity extends Activity {
         });
         int sz = Ui.dp(c, 42);
         if (!big) {
+            final Button camSw = Ui.button(c, usbCam(c) ? "USB CAM" : "PRINTER CAM", Color.parseColor("#99000000"), Ui.TEXT, 0);
+            camSw.setTextSize(11);
+            camSw.setMinHeight(sz);
+            camSw.setMinimumHeight(sz);
+            camSw.setPadding(Ui.dp(c, 12), 0, Ui.dp(c, 12), 0);
+            camSw.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    boolean u = !usbCam(MainActivity.this);
+                    getSharedPreferences("cam", MODE_PRIVATE).edit().putBoolean("usb", u).apply();
+                    camSw.setText(u ? "USB CAM" : "PRINTER CAM");
+                    etag = null;
+                }
+            });
+            LinearLayout.LayoutParams cl2 = new LinearLayout.LayoutParams(-2, sz);
+            cl2.rightMargin = Ui.dp(c, 8);
+            btns.addView(camSw, cl2);
             btns.addView(lightBtn, new LinearLayout.LayoutParams(sz, sz));
             ImageView rot = Ui.iconButton(c, "expand", Ui.TEXT, Color.parseColor("#99000000"));
             rot.setContentDescription("Watch full screen");
@@ -711,6 +727,9 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** Which camera the phone shows: the printer's own, or a USB webcam on the Pi. */
+    static boolean usbCam(Context c) { return c.getSharedPreferences("cam", Context.MODE_PRIVATE).getBoolean("usb", false); }
+
     private void pollCamera() {
         if (!running) return;
         net.execute(new Runnable() {
@@ -718,7 +737,8 @@ public class MainActivity extends Activity {
                 Bitmap bmp = null;
                 boolean ok = false;
                 try {
-                    Api.Resp r = Api.get(MainActivity.this, "/snapshot.jpg", etag, 8000);
+                    final boolean usb = usbCam(MainActivity.this);
+                    Api.Resp r = Api.get(MainActivity.this, usb ? "/cam2.jpg" : "/snapshot.jpg", etag, 8000);
                     if (r.code == 200 && r.body != null) {
                         bmp = BitmapFactory.decodeByteArray(r.body, 0, r.body.length);
                         etag = r.etag;
@@ -733,7 +753,7 @@ public class MainActivity extends Activity {
                             frame = fb;
                             if (cam != null) cam.setImageBitmap(fb);
                         }
-                        ui.postDelayed(new Runnable() { public void run() { pollCamera(); } }, fok ? 1000 : 3000);
+                        ui.postDelayed(new Runnable() { public void run() { pollCamera(); } }, fok ? (usbCam(MainActivity.this) ? 250 : 1000) : 3000);
                     }
                 });
             }

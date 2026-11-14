@@ -427,21 +427,24 @@ def login_ok(ip):
 
 
 # ---------------------------------------------------------------- camera (shared by every viewer)
-_flock = threading.Lock()
-_frame = [b"", 0.0, ""]   # jpeg, fetched at, etag
+_flocks = {"/frame.jpg": threading.Lock(), "/frame2.jpg": threading.Lock()}
+_frames = {}   # source -> [jpeg, fetched at, etag]
+SOURCES = {"/frame.jpg": ("/snapshot.jpg", 1.0), "/frame2.jpg": ("/cam2.jpg", 0.2)}
 
 
-def frame():
-    with _flock:  # one fetch per second no matter how many people watch
-        if time.time() - _frame[1] > 1.0:
+def frame(path="/frame.jpg"):
+    src, every = SOURCES[path]
+    with _flocks[path]:  # one fetch per interval no matter how many people watch
+        f = _frames.setdefault(path, [b"", 0.0, ""])
+        if time.time() - f[1] > every:
             try:
-                with urllib.request.urlopen(APP + "/snapshot.jpg", timeout=5) as r:
-                    _frame[0] = r.read()
+                with urllib.request.urlopen(APP + src, timeout=8) as r:
+                    f[0] = r.read()
             except Exception:
-                _frame[0] = b""
-            _frame[1] = time.time()
-            _frame[2] = '"' + hashlib.md5(_frame[0]).hexdigest()[:16] + '"' if _frame[0] else ""
-        return _frame[0], _frame[2]
+                f[0] = b""
+            f[1] = time.time()
+            f[2] = '"' + hashlib.md5(f[0]).hexdigest()[:16] + '"' if f[0] else ""
+        return f[0], f[2]
 
 
 PAGE_FILE = os.path.join(HERE, "page.html")
@@ -520,9 +523,9 @@ class H(BaseHTTPRequestHandler):
             visit(self.ip(), self.headers.get("User-Agent") or "", "opens")
             html = open(PAGE_FILE, encoding="utf-8").read().replace("__BASE__", BASE)
             return self.send(200, html, "text/html; charset=utf-8")
-        if method == "GET" and sub == "/frame.jpg":
+        if method == "GET" and sub in SOURCES:
             visit(self.ip(), self.headers.get("User-Agent") or "", "watch")
-            f, etag = frame()
+            f, etag = frame(sub)
             if not f:
                 return self.send(503, "no frame")
             if self.headers.get("If-None-Match") == etag:   # same picture as last time: send nothing

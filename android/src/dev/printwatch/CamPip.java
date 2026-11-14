@@ -116,7 +116,7 @@ final class CamPip {
                 Bitmap bmp = null;
                 boolean ok = false;
                 try {
-                    Api.Resp r = Api.get(a, "/snapshot.jpg", etag, 8000);
+                    Api.Resp r = Api.get(a, MainActivity.usbCam(a) ? "/cam2.jpg" : "/snapshot.jpg", etag, 8000);
                     if (r.code == 200 && r.body != null) {
                         BitmapFactory.Options o = new BitmapFactory.Options();
                         o.inSampleSize = 2;                       // small window, half-size frame is plenty

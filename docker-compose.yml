@@ -13,6 +13,7 @@ services:
     device_cgroup_rules:
       - "c 166:* rmw"             # ttyACM* (Arduino Uno)
       - "c 188:* rmw"             # ttyUSB* (clone boards)
+      - "c 81:* rmw"              # video* (USB webcam)
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }

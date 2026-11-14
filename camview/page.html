@@ -155,6 +155,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
         <div class="pill" id="state">CONNECTING</div>
         <div class="pill hide" id="live">● LIVE</div>
         <div class="cambtns">
+          <button class="ib hide" id="camSw" title="Switch camera" style="width:auto;padding:0 12px;font-weight:700;font-size:12px;letter-spacing:.04em"></button>
           <button class="ib hide" id="lightBtn" title="Chamber light"></button>
           <button class="ib" id="fsBtn" title="Full screen"></button>
         </div>
@@ -520,11 +521,19 @@ function confirmBox(title, msg, ok, fn, danger) {
 
 // ------------------------------------------------------------ camera (works locked too)
 let lastFrame = 0, lastTag = "", lastUrl = null;
+let camSrc = "/frame.jpg";
+try { if (localStorage.getItem("pv_cam") === "2") camSrc = "/frame2.jpg"; } catch (e) {}
+function setCamSrc(src) {
+  camSrc = src; lastTag = null;
+  try { localStorage.setItem("pv_cam", src === "/frame2.jpg" ? "2" : "1"); } catch (e) {}
+  $("#camSw").textContent = src === "/frame2.jpg" ? "USB CAM" : "PRINTER CAM";
+}
 // Asks every second, but only downloads a picture when the camera has a new one (the browser
 // sends the last picture's tag and the Pi answers "same as before" with no picture).
 async function camTick() {
   try {
-    const r = await fetch(BASE + "/frame.jpg", {cache: "no-cache"});
+    const src = camSrc;
+    const r = await fetch(BASE + src, {cache: "no-cache"});
     if (!r.ok) throw new Error();
     const tag = r.headers.get("ETag") || "";
     if (tag !== lastTag || !lastUrl) {
@@ -534,12 +543,14 @@ async function camTick() {
       lastUrl = url; lastTag = tag;
     }
     lastFrame = Date.now(); $("#live").classList.remove("hide");
-    setTimeout(camTick, 1000);
+    setTimeout(camTick, src === "/frame2.jpg" ? 200 : 1000);
   } catch (e) {
     if (Date.now() - lastFrame > 6000) { $("#live").classList.add("hide"); if (!unlocked) $("#state").textContent = "CAMERA OFFLINE"; }
     setTimeout(camTick, 3000);
   }
 }
+setCamSrc(camSrc);
+$("#camSw").onclick = () => setCamSrc(camSrc === "/frame.jpg" ? "/frame2.jpg" : "/frame.jpg");
 camTick();
 $("#fsBtn").onclick = () => {
   const c = $("#cam");
@@ -625,6 +636,9 @@ function render() {
   fp.className = "btn " + (p.state === "PAUSE" ? "go" : "pri") + (fp.classList.contains("hide") ? " hide" : "");
   fp.innerHTML = p.state === "PAUSE" ? IC.play + "Resume" : IC.pause + "Pause";
   fp.onclick = () => cmd(p.state === "PAUSE" ? "resume" : "pause", null, p.state === "PAUSE" ? "Resuming..." : "Pausing...");
+  const c2 = s.cam2 && s.cam2.present;
+  $("#camSw").classList.toggle("hide", !c2);
+  if (!c2 && camSrc !== "/frame.jpg") setCamSrc("/frame.jpg");
   NOW.update(s);
   const v = VIEWS[tab];
   if (v && v.update) v.update(s);
