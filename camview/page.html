@@ -525,7 +525,6 @@ function confirmBox(title, msg, ok, fn, danger) {
 // ------------------------------------------------------------ camera (works locked too)
 let lastFrame = 0, lastTag = "", lastUrl = null;
 let camSrc = "/frame.jpg";
-try { if (localStorage.getItem("pv_cam") === "2") camSrc = "/frame2.jpg"; } catch (e) {}
 function setCamSrc(src) {
   camSrc = src; lastTag = null;
   try { localStorage.setItem("pv_cam", src === "/frame2.jpg" ? "2" : "1"); } catch (e) {}
@@ -673,10 +672,10 @@ function render() {
   fp.className = "btn " + (p.state === "PAUSE" ? "go" : "pri") + (fp.classList.contains("hide") ? " hide" : "");
   fp.innerHTML = p.state === "PAUSE" ? IC.play + "Resume" : IC.pause + "Pause";
   fp.onclick = () => cmd(p.state === "PAUSE" ? "resume" : "pause", null, p.state === "PAUSE" ? "Resuming..." : "Pausing...");
-  const canSnd = role === "master" && !readOnly && s.audio && s.audio.present;
+  const canSnd = false;             // USB camera and sound removed from the web page
   $("#sndBtn").classList.toggle("hide", !canSnd);
   if (!canSnd && snd) soundOff();
-  const c2 = s.cam2 && s.cam2.present;
+  const c2 = false;
   $("#camSw").classList.toggle("hide", !c2);
   if (!c2 && camSrc !== "/frame.jpg") setCamSrc("/frame.jpg");
   NOW.update(s);
