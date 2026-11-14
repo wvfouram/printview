@@ -598,6 +598,10 @@ class H(BaseHTTPRequestHandler):
                 return self.send(e.code, e.read(), "application/json")
             except Exception:
                 return self.json(502, {"ok": False, "error": "PrintWatch isn't answering"})
+        if method == "GET" and sub == "/api/audio.pcm":     # live sound: master code only
+            if s["role"] != "master":
+                return self.json(403, {"ok": False, "error": "Sound needs the master code"})
+            return self.audio_proxy()
         if method == "POST" and sub == "/api/upload":
             return self.upload_proxy(query)
         if sub.startswith("/api/") and not sub.startswith(BLOCKED):
@@ -744,6 +748,31 @@ class H(BaseHTTPRequestHandler):
             return self.json(502, {"ok": False, "error": "Upload didn't reach PrintView"})
         finally:
             c.close()
+
+    def audio_proxy(self):
+        """Live sound: pass small pieces through right away (the normal proxy waits for 64 KB)."""
+        try:
+            r = urllib.request.urlopen(APP + "/api/audio.pcm", timeout=15)
+        except Exception:
+            return self.json(502, {"ok": False, "error": "no sound"})
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.close_connection = True
+            self.end_headers()
+            self.connection.settimeout(None)
+            while True:
+                chunk = r.read1(8192)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            r.close()
 
     def proxy(self, method, sub, data=None):
         if data is None and method == "POST":

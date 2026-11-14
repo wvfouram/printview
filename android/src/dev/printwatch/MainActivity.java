@@ -473,6 +473,15 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams cl2 = new LinearLayout.LayoutParams(-2, sz);
             cl2.rightMargin = Ui.dp(c, 8);
             btns.addView(camSw, cl2);
+            sndBtn = Ui.button(c, sndOn ? "SOUND ON" : "SOUND", Color.parseColor("#99000000"), sndOn ? Ui.ACCENT : Ui.TEXT, 0);
+            sndBtn.setTextSize(11);
+            sndBtn.setMinHeight(sz);
+            sndBtn.setMinimumHeight(sz);
+            sndBtn.setPadding(Ui.dp(c, 12), 0, Ui.dp(c, 12), 0);
+            sndBtn.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { if (sndOn) soundOff(); else soundOn(); } });
+            LinearLayout.LayoutParams sl2 = new LinearLayout.LayoutParams(-2, sz);
+            sl2.rightMargin = Ui.dp(c, 8);
+            btns.addView(sndBtn, sl2);
             btns.addView(lightBtn, new LinearLayout.LayoutParams(sz, sz));
             ImageView rot = Ui.iconButton(c, "expand", Ui.TEXT, Color.parseColor("#99000000"));
             rot.setContentDescription("Watch full screen");
@@ -695,6 +704,7 @@ public class MainActivity extends Activity {
     protected void onPause() {
         super.onPause();
         running = false;
+        soundOff();
         orient.disable();
     }
 
@@ -725,6 +735,73 @@ public class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    // ------------------------------------------------------------------ live sound (USB mic on the Pi)
+    private volatile boolean sndOn;
+    private Button sndBtn;
+    private Thread sndThread;
+
+    private void sndLabel() {
+        if (sndBtn == null) return;
+        sndBtn.setText(sndOn ? "SOUND ON" : "SOUND");
+        sndBtn.setTextColor(sndOn ? Ui.ACCENT : Ui.TEXT);
+    }
+
+    private void soundOn() {
+        if (sndOn) return;
+        sndOn = true;
+        sndLabel();
+        sndThread = new Thread(new Runnable() { public void run() {
+            int rate = 16000;
+            int min = android.media.AudioTrack.getMinBufferSize(rate, android.media.AudioFormat.CHANNEL_OUT_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT);
+            android.media.AudioTrack at = new android.media.AudioTrack(android.media.AudioManager.STREAM_MUSIC, rate,
+                    android.media.AudioFormat.CHANNEL_OUT_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, Math.max(min, rate), android.media.AudioTrack.MODE_STREAM);
+            java.net.HttpURLConnection h = null;
+            String err = null;
+            try {
+                h = Api.stream(MainActivity.this, "/api/audio.pcm");
+                h.setReadTimeout(20000);
+                if (h.getResponseCode() != 200) throw new java.io.IOException("HTTP " + h.getResponseCode());
+                java.io.InputStream in = h.getInputStream();
+                at.play();
+                byte[] buf = new byte[3200];
+                byte[] odd = new byte[1];
+                boolean hasOdd = false;
+                int n;
+                while (sndOn && (n = in.read(buf)) > 0) {
+                    int off = 0;
+                    if (hasOdd) { byte[] pair = {odd[0], buf[0]}; at.write(pair, 0, 2); off = 1; hasOdd = false; }
+                    int len = n - off;
+                    if ((len & 1) == 1) { odd[0] = buf[n - 1]; hasOdd = true; len--; }
+                    // louder: the webcam mic is quiet
+                    for (int i = off; i < off + len; i += 2) {
+                        int v = (short) ((buf[i] & 0xff) | (buf[i + 1] << 8)) * 5 / 2;
+                        if (v > 32767) v = 32767; if (v < -32768) v = -32768;
+                        buf[i] = (byte) v; buf[i + 1] = (byte) (v >> 8);
+                    }
+                    if (len > 0) at.write(buf, off, len);
+                }
+                if (sndOn) err = "Sound stopped";
+            } catch (Exception e) {
+                if (sndOn) err = "No sound: " + e.getMessage();
+            } finally {
+                try { at.stop(); } catch (Exception ignored) { }
+                at.release();
+                if (h != null) h.disconnect();
+            }
+            final String fe = err;
+            ui.post(new Runnable() { public void run() {
+                if (fe != null) android.widget.Toast.makeText(MainActivity.this, fe, android.widget.Toast.LENGTH_SHORT).show();
+                sndOn = false; sndLabel();
+            } });
+        } }, "sound");
+        sndThread.start();
+    }
+
+    private void soundOff() {
+        sndOn = false;
+        sndLabel();
     }
 
     /** Which camera the phone shows: the printer's own, or a USB webcam on the Pi. */

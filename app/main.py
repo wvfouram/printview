@@ -31,6 +31,7 @@ from . import gcode3d
 from .devinfo import DevInfo
 from .platecheck import PlateCheck
 from .usbcam import USBCam
+from .usbaudio import USBAudio
 from . import remote as rm
 from .store import Events, Notifier, Settings
 from .trainer import Trainer
@@ -110,6 +111,7 @@ def build_app():
         return ok
     app["devinfo"] = DevInfo(printer)
     app["usbcam"] = USBCam()
+    app["usbaudio"] = USBAudio()
     app["plate"] = PlateCheck(printer, camera, detector, notifier, events, settings, data_dir)
     app["history"] = History(printer, camera, data_dir, app["timelapse"])
     threading.Thread(target=_weekly_report, args=(app, data_dir), daemon=True, name="report").start()
@@ -136,6 +138,7 @@ def build_app():
     app.router.add_post("/api/settings", api_settings)
     app.router.add_get("/snapshot.jpg", snapshot)
     app.router.add_get("/cam2.jpg", cam2_jpg)
+    app.router.add_get("/api/audio.pcm", audio_pcm)
     app.router.add_get("/detection.jpg", detection_jpg)
     app.router.add_get("/stream.mjpg", mjpeg)
     app.router.add_post("/api/pair", api_pair)
@@ -222,7 +225,7 @@ def auth_token(app):
     return hmac.new(app["secret"].encode(), app["pin"].encode(), hashlib.sha256).hexdigest()
 
 
-QUIET = ("/api/streams", "/snapshot.jpg", "/cam2.jpg", "/stream.mjpg", "/api/stream")   # not logged: the stream view itself, video
+QUIET = ("/api/streams", "/snapshot.jpg", "/cam2.jpg", "/api/audio.pcm", "/stream.mjpg", "/api/stream")   # not logged: the stream view itself, video
 
 
 @web.middleware
@@ -326,6 +329,7 @@ def full_status(app):
         "device": app["devinfo"].status(),
         "plate": app["plate"].status(),
         "cam2": app["usbcam"].status(),
+        "audio": app["usbaudio"].status(),
     }
 
 
@@ -449,6 +453,27 @@ async def snapshot(request):
         raise web.HTTPNotModified()
     return web.Response(body=frame, content_type="image/jpeg",
                         headers={"Cache-Control": "no-cache", "ETag": etag})
+
+
+async def audio_pcm(request):
+    """Live microphone: raw 16 kHz mono signed 16-bit little-endian PCM, until the listener hangs up."""
+    au = request.app["usbaudio"]
+    sub = au.subscribe(asyncio.get_running_loop())
+    resp = web.StreamResponse(headers={"Content-Type": "application/octet-stream", "Cache-Control": "no-store",
+                                       "X-Audio-Rate": "16000", "X-Accel-Buffering": "no"})
+    await resp.prepare(request)
+    try:
+        while True:
+            try:
+                data = await asyncio.wait_for(sub[1].get(), timeout=10)
+            except asyncio.TimeoutError:
+                break                               # no sound for 10 s: mic gone
+            await resp.write(data)
+    except (ConnectionResetError, asyncio.CancelledError):
+        pass
+    finally:
+        au.unsubscribe(sub)
+    return resp
 
 
 async def cam2_jpg(request):

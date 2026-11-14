@@ -156,6 +156,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
         <div class="pill hide" id="live">● LIVE</div>
         <div class="cambtns">
           <button class="ib hide" id="camSw" title="Switch camera" style="width:auto;padding:0 12px;font-weight:700;font-size:12px;letter-spacing:.04em"></button>
+          <button class="ib hide" id="sndBtn" title="Live sound (master code)"></button>
           <button class="ib hide" id="lightBtn" title="Chamber light"></button>
           <button class="ib" id="fsBtn" title="Full screen"></button>
         </div>
@@ -459,6 +460,8 @@ const IC = {
   bulbOn:'<svg viewBox="0 0 24 24" fill="#ffb224" stroke="#ffb224" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="9.5" r="6"/><path d="M9.5 18.5h5M10.5 21.5h3"/></svg>',
   dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  snd:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  sndOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>',
   fs:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>',
 };
 $("#fsBtn").innerHTML = IC.fs;
@@ -550,6 +553,40 @@ async function camTick() {
   }
 }
 setCamSrc(camSrc);
+// ---------- live sound from the USB mic (master code only): raw 16 kHz PCM played through Web Audio
+let snd = null;
+async function soundOn() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const ab = new AbortController(), gain = ctx.createGain();
+  gain.gain.value = 2.5; gain.connect(ctx.destination);
+  snd = {ctx, ab};
+  $("#sndBtn").innerHTML = IC.snd; $("#sndBtn").style.color = "var(--ac)";
+  try {
+    const r = await fetch(BASE + "/api/audio.pcm", {signal: ab.signal, cache: "no-store"});
+    if (!r.ok) { let m = "No sound"; try { m = (await r.json()).error || m; } catch (e) {} throw new Error(m); }
+    const rd = r.body.getReader();
+    let t = 0, rest = new Uint8Array(0);
+    for (;;) {
+      const {value, done} = await rd.read();
+      if (done) break;
+      const all = new Uint8Array(rest.length + value.length); all.set(rest); all.set(value, rest.length);
+      const n = all.length >> 1; rest = all.slice(n * 2);
+      if (!n) continue;
+      const dv = new DataView(all.buffer, 0, n * 2), buf = ctx.createBuffer(1, n, 16000), ch = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) ch[i] = dv.getInt16(i * 2, true) / 32768;
+      const now = ctx.currentTime;
+      if (t < now + 0.05 || t > now + 1.2) t = now + 0.25;      // keep the delay short
+      const src = ctx.createBufferSource(); src.buffer = buf; src.connect(gain); src.start(t); t += buf.duration;
+    }
+    throw new Error("Sound stopped");
+  } catch (e) { if (snd && snd.ab === ab) { toast(e.name === "AbortError" ? "Sound off" : e.message); soundOff(); } }
+}
+function soundOff() {
+  if (snd) { try { snd.ab.abort(); } catch (e) {} try { snd.ctx.close(); } catch (e) {} }
+  snd = null; $("#sndBtn").innerHTML = IC.sndOff; $("#sndBtn").style.color = "";
+}
+$("#sndBtn").innerHTML = IC.sndOff;
+$("#sndBtn").onclick = () => snd ? soundOff() : soundOn();
 $("#camSw").onclick = () => setCamSrc(camSrc === "/frame.jpg" ? "/frame2.jpg" : "/frame.jpg");
 camTick();
 $("#fsBtn").onclick = () => {
@@ -636,6 +673,9 @@ function render() {
   fp.className = "btn " + (p.state === "PAUSE" ? "go" : "pri") + (fp.classList.contains("hide") ? " hide" : "");
   fp.innerHTML = p.state === "PAUSE" ? IC.play + "Resume" : IC.pause + "Pause";
   fp.onclick = () => cmd(p.state === "PAUSE" ? "resume" : "pause", null, p.state === "PAUSE" ? "Resuming..." : "Pausing...");
+  const canSnd = role === "master" && !readOnly && s.audio && s.audio.present;
+  $("#sndBtn").classList.toggle("hide", !canSnd);
+  if (!canSnd && snd) soundOff();
   const c2 = s.cam2 && s.cam2.present;
   $("#camSw").classList.toggle("hide", !c2);
   if (!c2 && camSrc !== "/frame.jpg") setCamSrc("/frame.jpg");

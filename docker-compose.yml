@@ -14,6 +14,7 @@ services:
       - "c 166:* rmw"             # ttyACM* (Arduino Uno)
       - "c 188:* rmw"             # ttyUSB* (clone boards)
       - "c 81:* rmw"              # video* (USB webcam)
+      - "c 116:* rmw"             # sound devices (USB webcam mic)
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
