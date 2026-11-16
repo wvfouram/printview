@@ -131,7 +131,15 @@ You'll get alerts for failures, auto-pauses, finished prints and a weekly report
 
 ### PrintView Admin (on the Pi itself)
 
-A "PrintView Admin" app on the Pi's desktop: the whole website with owner powers and no codes, plus kicking anyone off the web link (master users too), changing both codes, adding videos from the Pi's folders, logs, and a one-button update. It only works on the Pi itself, so whoever is logged in to the Pi is the admin.
+A real desktop app on the Pi (needs the Raspberry Pi OS desktop). No codes needed, because it only talks to PrintView on that Pi, so whoever is logged in to the Pi is the admin:
+
+- **Live:** camera, status, pause / resume / stop, light, speed, temperatures, start the next print in the queue
+- **Queue:** reorder and remove queued prints, cancel scheduled prints
+- **Files:** the SD card files: add to queue, save to the Pi, delete
+- **Videos:** play timelapses, save copies, redo, and add a video from any folder on the Pi
+- **People:** kick anyone off the web link (master users too), kick everyone, freeze
+- **Codes:** change the general and the master code
+- **System:** Pi temperature, memory and storage, logs, restart, and a one-button update from GitHub
 
 ```bash
 cd ~/printview && ./pvadmin/install_admin.sh
