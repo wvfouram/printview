@@ -135,6 +135,8 @@ def build_app():
     app.router.add_post("/api/timelapse/{tid}/render", api_tl_render)
     app.router.add_get("/api/timelapse/{tid}/timelapse.mp4", api_tl_video)
     app.router.add_get("/api/timelapse/{tid}/thumb.jpg", api_tl_thumb)
+    app.router.add_get("/lan/tl/{tid}/{tok}", lan_tl_page)
+    app.router.add_get("/lan/tl/{tid}/{tok}/video.mp4", lan_tl_file)
     app.router.add_get("/api/stream", api_stream)
     app.router.add_post("/api/cmd", api_cmd)
     app.router.add_post("/api/settings", api_settings)
@@ -225,7 +227,7 @@ def load_secret(data_dir):
 
 
 # ------------------------------------------------------------------ auth (optional PIN)
-OPEN_PATHS = ("/login", "/api/login", "/manifest.webmanifest", "/sw.js", "/static/")
+OPEN_PATHS = ("/login", "/api/login", "/manifest.webmanifest", "/sw.js", "/static/", "/lan/")
 
 
 def auth_token(app):
@@ -341,9 +343,49 @@ def full_status(app):
     }
 
 
+def _lan_token(app, tid):
+    return hmac.new(app["secret"].encode() if isinstance(app["secret"], str) else app["secret"],
+                    ("tl:" + tid).encode(), hashlib.sha256).hexdigest()[:24]
+
+
+def _lan_ip(app):
+    """The Pi's address on the home network (the one it uses to reach the printer)."""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+            sk.connect((env("PRINTER_IP", "192.168.1.1"), 9))
+            return sk.getsockname()[0]
+    except OSError:
+        return None
+
+
 async def api_tl_list(request):
     tl = request.app["timelapse"]
-    return web.json_response({"status": tl.status(), "items": tl.list()})
+    items = tl.list()
+    for it in items:
+        it["lan_token"] = _lan_token(request.app, it["id"])
+    return web.json_response({"status": tl.status(), "items": items,
+                              "lan": {"ip": _lan_ip(request.app), "port": int(env("PORT", "8080"))}})
+
+
+async def lan_tl_page(request):
+    """Home-network fast download: a plain http page that starts the download itself (a secure page
+    can't start an http download directly without the browser complaining)."""
+    tid, tok = request.match_info["tid"], request.match_info["tok"]
+    if not hmac.compare_digest(tok, _lan_token(request.app, tid)) or not request.app["timelapse"].video_path(tid):
+        raise web.HTTPNotFound(text="Link not valid (or not on the home network)")
+    url = f"/lan/tl/{tid}/{tok}/video.mp4"
+    return web.Response(content_type="text/html", text=f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width">
+<title>Downloading</title><body style="background:#0b0c0e;color:#eee;font:16px system-ui;display:grid;place-items:center;height:90vh;text-align:center">
+<div>Downloading over your home network...<br><br><a style="color:#ffb224" href="{url}">Tap here if it doesn't start</a></div>
+<script>location.href="{url}"</script>""")
+
+
+async def lan_tl_file(request):
+    tid, tok = request.match_info["tid"], request.match_info["tok"]
+    if not hmac.compare_digest(tok, _lan_token(request.app, tid)):
+        raise web.HTTPNotFound()
+    return _tl_file(request.app, tid, dl=True)
 
 
 async def api_tl_render(request):
@@ -359,15 +401,18 @@ async def api_tl_thumb(request):
 
 
 async def api_tl_video(request):
-    p = request.app["timelapse"].video_path(request.match_info["tid"], web=request.query.get("web") == "1")
+    return _tl_file(request.app, request.match_info["tid"], request.query.get("web") == "1", request.query.get("dl") == "1")
+
+
+def _tl_file(app, tid, light=False, dl=False):
+    p = app["timelapse"].video_path(tid, web=light)
     if not p:
         raise web.HTTPNotFound()
-    tid = request.match_info["tid"]
-    job = (request.app["timelapse"]._meta(os.path.join(request.app["timelapse"].root, tid)).get("job") or tid)
+    job = (app["timelapse"]._meta(os.path.join(app["timelapse"].root, tid)).get("job") or tid)
     name = re.sub(r"(?i)(\.gcode)?\.3mf$", "", os.path.basename(str(job))) or "timelapse"
     name = re.sub(r'[\\/:*?"<>|\r\n]+', "_", name)[:120] + ".mp4"
     from urllib.parse import quote
-    disp = ("attachment" if request.query.get("dl") == "1" else "inline") + \
+    disp = ("attachment" if dl else "inline") + \
         f'; filename="{name.encode("ascii", "replace").decode().replace("?", "_")}"; filename*=UTF-8\'\'{quote(name)}'
     return web.FileResponse(p, headers={"Content-Type": "video/mp4", "Content-Disposition": disp})   # Range works
 
