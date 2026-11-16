@@ -14,7 +14,7 @@ Total time: about 45 minutes, mostly waiting.
 
 | Thing | Notes |
 |---|---|
-| Raspberry Pi 5 | 4 GB or 8 GB |
+| Raspberry Pi 5 | 4 GB or 8 GB is best. 2 GB works, but slower: the 3D preview, timelapse videos and training take longer, and it can lag with lots of viewers |
 | Official Raspberry Pi 27 W power supply | Weaker chargers make the Pi crash |
 | microSD card, 32 GB or bigger | Or a USB SSD |
 | A computer | Windows, Mac or Linux, just for setting up the card |
