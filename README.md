@@ -1,129 +1,195 @@
 # PrintView
 
-Live camera, pause / resume / stop, chamber light, and local spaghetti detection for a Bambu Lab P1S in LAN-only + Developer Mode. Runs on a Raspberry Pi 5. You control it from a phone web app, the Android app, or a public web link.
+Watch and control a **Bambu Lab P1S** from your phone or any browser, with AI spaghetti detection, timelapses, a print queue and a public web link. It all runs on a **Raspberry Pi 5** at your home. No Bambu cloud needed.
 
-**Live demo (my printer, view-only without a code):** https://printwatch.tail9ea1be.ts.net:10000/yDTJstKkrryn8tdm
+**Live demo (my printer, view-only):** https://printwatch.tail9ea1be.ts.net:10000/yDTJstKkrryn8tdm
 
-**Android app:** download `PrintView.apk` from [Releases](../../releases). It works with any PrintView Pi: open it, enter your Pi's address, and pair.
+---
 
-Features: live camera with per-viewer video settings, controls, AMS editing, print from SD (newest first), skip objects, printer HMS errors in plain English, custom-trainable spaghetti detection, per-layer timelapses, an Arduino relay bed controller with predictive temperature control, a public web link with view-only visitors and a master command center, and a data-streams view.
+## Install it (step by step, no experience needed)
 
-## Install on the Pi
+Total time: about 45 minutes, mostly waiting.
 
-```bash
-git clone https://github.com/wvfouram/printview.git && cd printview
-chmod +x install.sh
-./install.sh
-```
+### What you need
 
-The installer asks for the printer IP, serial number, access code, an optional app PIN, and an optional ntfy URL. It checks that the printer is reachable, builds the container, and prints the address to open on your phone. The first build takes about 5 to 10 minutes on a Pi 5.
-
-**Copy the zip from your computer to the Pi:**
-```bash
-scp printwatch.zip <pi-user>@<pi-ip>:~
-```
-
-## Phone app
-
-Open `http://<pi-ip>:8080` on your phone while it's on the same Wi-Fi, then add it to your home screen:
-- **iPhone:** Safari > Share > Add to Home Screen. It opens full screen like an app.
-- **Android:** Chrome > menu > Add to Home screen.
-
-The app gives you:
-- **Live view** of the printer camera, with a full-screen button and a chamber light toggle.
-- **Status:** progress, time remaining and ETA, layer, and nozzle and bed temperatures.
-- **Pause / Resume** with one tap. **Stop** needs a press-and-hold to confirm.
-- **Spaghetti watch:** a live failure score, an auto-pause toggle, sensitivity (Low / Med / High), and the last flagged frame with boxes drawn on it.
-- **Activity log** of starts, pauses, detections and finishes.
-
-## Printer controls (Android app → Printer controls)
-
-Everything the P1S accepts over LAN MQTT:
-- **Print speed:** Silent / Standard / Sport / Ludicrous, mid-print.
-- **Temperatures:** nozzle and bed targets (±5°, exact value, PLA/PETG/ABS/TPU presets, cool down). Capped at the P1S maximums of 300° nozzle and 100° bed.
-- **Fans:** part cooling, aux and chamber, 0-100%.
-- **AMS:** see every slot's material, color and remaining amount; tap a slot to load it, set its filament type/color/temps (for non-RFID spools), or re-read its RFID tag; unload; retry after an AMS error. Shows AMS temperature, humidity and drying time left (AMS 2 Pro / AMS HT). Drying itself can only be started from the P1S screen; the P1 series doesn't accept drying commands over the network.
-- **Move:** home, jog X/Y/Z in 1/10/50 mm steps, motors off. **Locked while a print is running or paused.**
-- **G-code console:** sends raw G-code. Movement commands are refused while printing.
-- **Printer options:** auto-recover from step loss, AMS auto-refill, RFID reading at power-on / insert, remaining-filament estimate.
-- **Calibration:** bed leveling, vibration compensation, motor noise cancellation.
-- **Extrude / retract** 10 mm (nozzle must be 170°+).
-- **Printer info:** current stage, Wi-Fi signal, nozzle size and any HMS error codes (tap to open Bambu's wiki page for the code).
-
-## SD card (app: Print from SD card, Current job, Timelapses)
-
-Read straight from the printer's SD card over its LAN FTPS port:
-- **Print from SD card:** every sliced `.3mf` (from Bambu Studio / OrcaSlicer "Send"), with plate preview, print time and weight. Pick the plate, map each filament to an AMS slot (auto-matched by type and color), choose timelapse / bed leveling / flow / vibration calibration, start.
-- **Current job:** plate preview and **skip objects**.
-- **Timelapses:** list with thumbnails; download into the app (works away from home too), then play or save/share.
-
-## Spaghetti detection
-
-PrintWatch runs Obico's open-source failure-detection model locally on the Pi CPU, with no cloud involved. It checks a frame every 10 seconds while the printer is printing, using Obico's own scoring algorithm and tuned thresholds:
-- The first **5 minutes** of each print are a warm-up and won't trigger.
-- **Warning:** you get a push alert (if ntfy is set up) and an entry in the log.
-- **Failure:** the print auto-pauses (if enabled) and you get an urgent alert with the flagged image.
-- After you resume, there's a 1-minute grace period before checking starts again.
-
-Keep the chamber light on during prints so the camera has enough light to see.
-
-## Training your own model
-
-Every print gets recorded automatically: one frame every 10 seconds, plus the features the Obico network extracts from it. Open **Train** from the Spaghetti watch card to see them.
-
-- **Prints that finish cleanly** get marked good on their own.
-- **Failed, stopped or flagged prints** go into "Needs review." Open one, drag to the first frame where it went wrong, and tap **Failure started here**. If nothing actually went wrong, tap **Whole print was fine**.
-- The app retrains on the Pi automatically about 20 seconds after you label something, which takes a few seconds. You can also tap **Train now**.
-- Once you have 3 failed and 3 good prints, your model takes over the pause decision, and Obico drops to sending warnings only. You can switch back with **Use my model**.
-
-**Accuracy you can trust:** the Train screen shows how your model does on **your** past prints. It uses cross-validation, so each print is scored by a model that never saw it. Next to that, it shows how Obico's stock algorithm did on the same prints. The pause threshold is chosen automatically, counting a false alarm as 1.5 times worse than a missed failure. The sensitivity setting shifts it up or down.
-
-**Getting failures on purpose:** knock over a tall, thin tower mid-print, or print PETG without glue so it lets go of the bed. Do this in several filament colors, including black and white, which are the hardest for the camera to see. 10 or more failures makes a strong model.
-
-Recordings take up about 10 MB per hour of printing. When the dataset goes over `DATASET_MAX_GB` (3 by default), the app deletes thumbnails from the oldest good prints first. It keeps their features, so those prints still count for training.
-
-## Away from home: phone ↔ Pi, nothing in between
-
-The Android app talks straight to the Pi: plain HTTP on your home Wi-Fi, and **HTTPS on port 8443** everywhere else. No VPN app, relay or cloud.
-
-- **Pairing is automatic:** the first time the app reaches the Pi on your home Wi-Fi, it gets a private device key and the Pi's certificate fingerprint. Away from home the app only trusts *that* certificate and sends that key, so nobody else can connect, even if they find the port.
-- **Router forwarding is automatic when UPnP is on** (most home routers, including Xfinity, have it on by default). The Pi also learns your public address from the router. Check the result in the app under the gear icon.
-- **If UPnP is off:** in your router, forward **TCP 8443** to the Pi (10.0.0.43), and set `REMOTE_HOST=<your public IP>` in `.env`.
-- 10 wrong keys from one address block it for an hour. Re-pair a phone with the gear icon, then Re-pair, on home Wi-Fi.
-- `.env` options: `REMOTE=off` disables it, `REMOTE_PORT=8443`, `UPNP=off`, `REMOTE_HOST=`.
-
-If your internet provider uses CGNAT (shared public address), nothing at home can be reached from outside; the app will warn you.
-
-## Push alerts (optional)
-
-1. Install the **ntfy** app (iOS or Android).
-2. Subscribe to a long, random topic name, for example `printwatch-7f3k9q2xv8`.
-3. Set `NTFY_URL=https://ntfy.sh/printwatch-7f3k9q2xv8` in `.env`, then run `docker compose up -d`.
-
-You'll get alerts for possible failures, auto-pauses, and finished or failed prints. Anyone who knows the topic name can read these alerts, so make it hard to guess.
-
-## Everyday commands (run in the printwatch folder)
-
-```bash
-docker compose logs -f        # watch logs
-docker compose restart        # restart
-docker compose up -d --build  # apply changes to .env or code
-docker compose down           # stop
-```
-
-## Troubleshooting
-
-| Symptom | Fix |
+| Thing | Notes |
 |---|---|
-| Printer dot red | Confirm LAN Only Mode and Developer Mode are on, and check the IP and access code in `.env`. The access code changes if you toggle LAN mode. |
-| Camera offline | Port 6000 must be reachable. Close Bambu Studio's live view, because the printer may only allow one camera viewer at a time. |
-| "Bad frame size" | Wrong access code. |
-| Detection says model not found | The model download failed during the build. Run `docker compose build --no-cache`. |
-| Too many false alarms | Set sensitivity to Low. |
+| Raspberry Pi 5 | 4 GB or 8 GB |
+| Official Raspberry Pi 27 W power supply | Weaker chargers make the Pi crash |
+| microSD card, 32 GB or bigger | Or a USB SSD |
+| A computer | Windows, Mac or Linux, just for setting up the card |
+| Bambu Lab P1S | Firmware 01.08.02.00 or newer, on the same Wi-Fi/network as the Pi |
+| Android phone | Optional, for the app |
+
+### Step 1: Get the printer ready
+
+On the printer's screen:
+
+1. Go to **Settings > WLAN / Network**.
+2. Turn **LAN Only Mode** on.
+3. Turn the printer **off and on** once.
+4. Go back to **Settings > WLAN / Network** and turn **Developer Mode** on.
+5. On that same page, write down:
+   - the **IP address** (looks like `192.168.1.50`)
+   - the **Access Code** (8 characters)
+6. Write down the **serial number**. It's on the sticker on the back of the printer, and in Bambu Studio under **Device**.
+
+> LAN Only Mode means the Bambu Handy app and Bambu cloud stop working with this printer. Bambu Studio still works over your Wi-Fi.
+
+### Step 2: Put Raspberry Pi OS on the card
+
+1. On your computer, download and install **Raspberry Pi Imager** from https://www.raspberrypi.com/software/
+2. Put the microSD card in your computer and open Raspberry Pi Imager.
+3. Choose:
+   - **Device:** Raspberry Pi 5
+   - **Operating system:** Raspberry Pi OS **(64-bit)**
+   - **Storage:** your microSD card
+4. When it asks about customization, choose **Edit settings** / customize and fill in:
+   - a **username** and **password** (write them down)
+   - your **Wi-Fi name and password** (skip if you'll use a network cable)
+   - turn on **SSH** (under Services)
+5. Write the card, put it in the Pi, plug in power, and wait about 2 minutes.
+
+### Step 3: Open a terminal on the Pi
+
+Either one works:
+- **Screen and keyboard on the Pi:** click the black terminal icon at the top.
+- **From your computer:** open Terminal (Mac/Linux) or PowerShell (Windows) and type `ssh yourusername@raspberrypi.local`, then your password.
+
+Everything below is typed into that terminal. Paste a line, press **Enter**, and wait until it finishes.
+
+### Step 4: Download PrintView and run the installer
+
+```bash
+sudo apt update && sudo apt install -y git
+git clone https://github.com/wvfouram/printview.git ~/printview
+cd ~/printview && chmod +x install.sh && ./install.sh
+```
+
+The **first time**, the installer sets up Docker and then tells you to restart. Do that:
+
+```bash
+sudo reboot
+```
+
+Wait 1 minute, open the terminal again (Step 3), and run the installer a second time:
+
+```bash
+cd ~/printview && ./install.sh
+```
+
+Now it asks for the **IP, serial number and access code** from Step 1, checks it can reach the printer, and builds PrintView. That takes 5 to 15 minutes the first time. When it's done it prints an address like:
+
+```
+PrintView is running: http://192.168.1.60:8080
+```
+
+Open that address on a phone or computer on the same Wi-Fi. You should see the printer camera.
+
+### Step 5 (optional): The public web link
+
+At the end, the installer asks **"Set it up now? (y/N)"**. Type `y` to get a link that works from anywhere:
+
+1. Choose a **general code** (controls the printer) and a **master code** (also opens the Owner page). Use different codes.
+2. The installer installs **Tailscale** (free) and shows a login link. Open it on any device and sign in with Google, Microsoft or GitHub.
+3. If Tailscale asks you to **enable HTTPS** and **Funnel**, click to approve, then run `./install.sh` once more.
+4. It prints your public link, like `https://raspberrypi.tail1234.ts.net:10000/AbCdEf123`.
+
+Anyone with that link can **watch**. Controlling the printer needs your general or master code.
+
+### Step 6 (optional): The Android app
+
+1. On your phone, open the **[Releases](../../releases)** page and download **PrintView.apk**.
+2. Open it and allow installing from your browser if Android asks.
+3. In the app, tap the **gear icon**, type the address from Step 4 (like `http://192.168.1.60:8080`), and tap **Save**.
+4. Do this the first time while the phone is on your home Wi-Fi. The app pairs with the Pi by itself and then also works away from home.
+
+### Step 7 (optional): Phone alerts
+
+1. Install the **ntfy** app on your phone.
+2. In ntfy, subscribe to a long, random topic name, for example `printview-7f3k9q2xv8`.
+3. On the Pi:
+   ```bash
+   cd ~/printview && nano .env
+   ```
+   Set `NTFY_URL=https://ntfy.sh/printview-7f3k9q2xv8`, press **Ctrl+O**, **Enter**, **Ctrl+X**, then run `./install.sh`.
+
+You'll get alerts for failures, auto-pauses, finished prints and a weekly report.
+
+---
+
+## Updating
+
+```bash
+cd ~/printview && git pull && ./install.sh
+```
+
+## If something doesn't work
+
+| What you see | What to do |
+|---|---|
+| Installer says "This needs the 64-bit Raspberry Pi OS" | Re-do Step 2 and pick **Raspberry Pi OS (64-bit)** |
+| Installer says ports don't answer | Check LAN Only Mode and Developer Mode are on, and the IP is right (it can change after a router restart) |
+| "PRINTER OFFLINE" on the page | Same as above. The access code changes if you turn LAN Only Mode off and on: run `nano .env`, fix `ACCESS_CODE`, then `./install.sh` |
+| Camera offline | Close the live view in Bambu Studio; the printer allows only one camera viewer at a time |
+| Too many false spaghetti alarms | Safety tab > Sensitivity > Low |
+| Something else | `cd ~/printview && docker compose logs --tail 50` and open an issue with the output |
+
+---
+
+## What it can do
+
+- **Live camera** under every page, with live status: percent, time left, finish time, layer, temperatures, Pause / Stop.
+- **Print tab:** SD card files with slicer thumbnails, an interactive **3D toolpath preview**, filament-to-AMS mapping, start now, **schedule for later**, or add to the **print queue** and tap *Start next* when a print is done. Upload, download, delete (deleted files are kept on the Pi). Skip objects mid-print.
+- **Control tab:** speed modes, temperatures with presets, fans, moving the axes, printer options, calibration, and a G-code console (master code).
+- **AMS tab:** every AMS unit and slot (including AMS HT), temperature and humidity, load / unload, set filament, K values.
+- **Safety tab:** local AI **spaghetti detection** with auto-pause, a **clear-plate check** when a print starts, and your own trainable model.
+- **Videos tab:** smooth per-layer **timelapses** made by the Pi, timelapses from the SD card, and print history with a photo of every finished print.
+- **Printer tab:** everything the printer reports, activity log, firmware versions (serial numbers hidden).
+- **Android app** with the same features, a floating camera on every screen, and direct, paired access from anywhere.
+- **Public web link** with view-only visitors, a general code, and a master code with an Owner page (freeze everyone, change the general code, see who's watching).
+
+## Everyday commands
+
+Run these in `~/printview`:
+
+```bash
+docker compose logs -f        # watch what it's doing (Ctrl+C to stop watching)
+docker compose restart        # restart it
+./install.sh                  # apply changes after editing .env
+docker compose down           # stop it
+```
+
+## Advanced
+
+<details><summary>Settings in .env</summary>
+
+| Setting | Meaning |
+|---|---|
+| `PRINTER_IP`, `PRINTER_SERIAL`, `ACCESS_CODE` | From the printer (Step 1) |
+| `APP_PIN` | Optional PIN to lock the web app on your Wi-Fi |
+| `NTFY_URL` | Phone alerts (Step 7) |
+| `REMOTE=on`, `REMOTE_PORT=8443`, `UPNP=on`, `REMOTE_HOST=` | How the Android app reaches the Pi away from home. With UPnP on, your router forwards port 8443 by itself. If UPnP is off, forward TCP 8443 to the Pi in your router and set `REMOTE_HOST` to your public IP |
+| `DATASET_MAX_GB=3` | How much space detection recordings may use |
+
+</details>
+
+<details><summary>How the spaghetti detection works</summary>
+
+PrintView runs [Obico](https://github.com/TheSpaghettiDetective/obico-server)'s open-source failure-detection model on the Pi, with no cloud. It checks a frame every 10 seconds while printing. The first minutes of each print are a warm-up. A warning sends a phone alert; a failure pauses the print (if auto-pause is on) and sends the picture.
+
+Every print is recorded (a frame every 10 s). Finished prints are marked good automatically; failed or flagged ones wait for you to mark where the failure started in the Safety tab. With 3 failed and 3 good prints, your own model can take over the pause decision. The Safety tab shows how it scores on your past prints, compared with Obico's stock model.
+
+</details>
+
+<details><summary>Arduino bed relay (optional)</summary>
+
+The `arduino/` folder has sketches for an Arduino Uno that switches an external bed heater through a relay, controlled by PrintView. Not needed for anything else.
+
+</details>
 
 ## Notes
 
-- The P1S camera runs at about 0.5 fps over LAN, which is a limit of the printer.
-- `http://<pi-ip>:8080/stream.mjpg` is a standard MJPEG stream you can use in VLC or Home Assistant. It's also the starting point for streaming to the web later.
-- Settings, the event log, recordings and your trained model are stored in `./data`. Back it up to keep your model.
-- The spaghetti model comes from [Obico](https://github.com/TheSpaghettiDetective/obico-server) (AGPL-3.0) and is downloaded during the build.
+- The P1S camera sends about 1 picture per second over the network. That's the printer's limit.
+- Your settings, recordings, timelapses and trained model are stored in `~/printview/data`. Back it up to keep them.
+- The spaghetti model comes from Obico (AGPL-3.0) and is downloaded during the build.
