@@ -44,17 +44,22 @@ def _save_state():
     os.replace(tmp, STATEF)
 
 
+def master_code():
+    """Set from the Pi admin app (state.json) overrides MASTER_CODE from the environment."""
+    return (_state.get("master") or MASTER).strip()
+
+
 def general_code():
     return (_state.get("code") or os.environ.get("ACCESS_CODE", "")).strip()
 
 
 def tag_for(role):
     """Sessions die when their code changes."""
-    code = MASTER if role == "master" else general_code()
+    code = master_code() if role == "master" else general_code()
     return hashlib.sha256((role + ":" + code).encode()).hexdigest()[:16]
 
 # API calls allowed through (everything the phone app uses, minus phone pairing)
-BLOCKED = ("/api/pair", "/api/remote", "/api/login", "/api/camview", "/api/bed/")
+BLOCKED = ("/api/pair", "/api/remote", "/api/login", "/api/camview", "/api/bed/", "/api/timelapse/import")
 # What anyone with the link (no code, or frozen) may read. Nothing that changes anything.
 READ_ONLY = ("/api/status", "/api/job", "/api/job/plate.png")
 # Anyone with the link may look at (GET) everything else too, except these. Nothing that changes anything
@@ -669,7 +674,7 @@ class H(BaseHTTPRequestHandler):
             code = ""
         time.sleep(0.8)  # slow down guessing
         role = None
-        if MASTER and hmac.compare_digest(code.encode(), MASTER.encode()):
+        if master_code() and hmac.compare_digest(code.encode(), master_code().encode()):
             role = "master"
         elif general_code() and hmac.compare_digest(code.encode(), general_code().encode()):
             role = "general"
@@ -705,7 +710,7 @@ class H(BaseHTTPRequestHandler):
             code = str(b.get("code", "")).strip()
             if not (4 <= len(code) <= 32) or not code.isalnum():
                 return self.json(400, {"ok": False, "error": "Use 4 to 32 letters or numbers"})
-            if code == MASTER:
+            if code == master_code():
                 return self.json(400, {"ok": False, "error": "Can't be the same as the master code"})
             _state["code"] = code
             _save_state()
@@ -726,10 +731,28 @@ class H(BaseHTTPRequestHandler):
             return self.json(200, {"ok": True})
         if method == "POST" and sub == "/admin/kick":
             sid = str(b.get("id", ""))
+            roles = ("general", "master") if me is None else ("general",)   # only the Pi itself can kick master users
             with _slock:
-                for k in [k for k, v in _sessions.items() if v["id"] == sid and v["role"] == "general"]:
+                for k in [k for k, v in _sessions.items() if v["id"] == sid and v["role"] in roles]:
                     del _sessions[k]
                 _save_sessions()
+            return self.json(200, {"ok": True})
+        if method == "POST" and sub == "/admin/kick_all" and me is None:
+            role = b.get("role")
+            if role in ("general", "master"):
+                drop_role(role)
+            else:
+                drop_role("general"); drop_role("master")
+            return self.json(200, {"ok": True})
+        if method == "POST" and sub == "/admin/master_code" and me is None:     # Pi admin app only
+            code = str(b.get("code", "")).strip()
+            if not (4 <= len(code) <= 32) or not all(c.isalnum() or c in "_-" for c in code):
+                return self.json(400, {"ok": False, "error": "Use 4 to 32 letters, numbers, _ or -"})
+            if code == general_code():
+                return self.json(400, {"ok": False, "error": "Can't be the same as the general code"})
+            _state["master"] = code
+            _save_state()
+            drop_role("master")    # everyone on the old master code is logged out
             return self.json(200, {"ok": True})
         return self.send(404, "not found")
 

@@ -619,7 +619,7 @@ function setUnlocked(v, r) {
   $("#robar").classList.toggle("hide", !readOnly);
   $("#roTxt").textContent = blocked ? "Frozen by the owner: view only for now." : "View only. You can see everything but can't change anything.";
   $("#roCode").classList.toggle("hide", blocked);
-  $("#lockBtn").classList.toggle("hide", !v);
+  $("#lockBtn").classList.toggle("hide", !v || !!window.PV_ADMIN);
   $("#lightBtn").classList.toggle("hide", !usable);
   $("#grid").classList.add("unlocked");
   if (!usable) $("#fsPause").classList.add("hide");
@@ -738,7 +738,10 @@ function compose(...parts) {
 const printing = () => status && active(status.printer.state);
 const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["videos", "Videos"], ["printer", "Printer"]];
 const RO_TABS = TABS;      // the public sees every tab (read-only); only Owner needs the master code
-function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Owner"]]) : TABS; }
+function tabList() {
+  if (window.PV_ADMIN) return TABS.concat([["admin", "Owner"], ["piadmin", "Pi admin"]]);
+  return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Owner"]]) : TABS;
+}
 function renderTabs() {
   const tabs = tabList();
   $("#tabs").innerHTML = tabs.map(([k, n]) => `<button data-k="${k}" class="${k === tab ? "on" : ""}"${k === "admin" ? ' style="color:var(--ac)"' : ""}>${n}</button>`).join("");
@@ -1430,13 +1433,13 @@ VIEWS.timelapses = {
       const busy = v.some(x => x.rendering || x.queued);
       $("#tPi").innerHTML = v.length ? v.map(x => {
         const when = new Date((x.t || 0) * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
-        const btn = (x.video && !x.rendering && !x.queued) ? `<a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4?web=1" target="_blank" rel="noopener" style="margin-right:6px">Play</a><a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" target="_blank" rel="noopener" style="margin-right:6px">Play HD</a>${lan.ip && x.lan_token ? `<a class="btn sm ro-ok" href="http://${lan.ip}:${lan.port}/lan/tl/${encodeURIComponent(x.id)}/${x.lan_token}" target="_blank" rel="noopener" title="Only works when this device is on the same Wi-Fi as the Pi" style="margin-right:6px">Download (home Wi-Fi, fast)</a>` : ""}<a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4?dl=1" download="${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}.mp4" title="Works anywhere, limited by your home upload speed" style="margin-right:6px">Download (anywhere, slower)</a><button class="btn sm" data-mk="${esc(x.id)}" title="Make the video again with the latest settings">Redo</button>`
+        const btn = (x.video && !x.rendering && !x.queued) ? `<a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4?web=1" target="_blank" rel="noopener" style="margin-right:6px">Play</a><a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" target="_blank" rel="noopener" style="margin-right:6px">Play HD</a>${lan.ip && x.lan_token ? `<a class="btn sm ro-ok" href="http://${lan.ip}:${lan.port}/lan/tl/${encodeURIComponent(x.id)}/${x.lan_token}" target="_blank" rel="noopener" title="Only works when this device is on the same Wi-Fi as the Pi" style="margin-right:6px">Download (home Wi-Fi, fast)</a>` : ""}<a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4?dl=1" download="${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}.mp4" title="Works anywhere, limited by your home upload speed" style="margin-right:6px">Download (anywhere, slower)</a>${x.frames ? `<button class="btn sm" data-mk="${esc(x.id)}" title="Make the video again with the latest settings">Redo</button>` : ""}`
           : x.rendering ? `<div style="min-width:220px"><div class="row" style="gap:8px"><span class="sm grow" style="color:var(--ac)">Making video ${x.progress ? x.progress.pct.toFixed(0) + "%" : "..."}</span><span class="fa sm">${x.progress && x.progress.eta_s != null ? "~" + (x.progress.eta_s >= 3600 ? Math.floor(x.progress.eta_s / 3600) + "h " : "") + Math.round(x.progress.eta_s % 3600 / 60) + "m left" : ""}</span></div>
               <div class="bar" style="height:6px;margin-top:6px"><i style="width:${x.progress ? x.progress.pct : 0}%;background:var(--ac)"></i></div></div>` : x.queued ? '<span class="chip">Queued</span>'
           : `<button class="btn sm pri" data-mk="${esc(x.id)}">Make video</button>`;
         return `<div style="flex-wrap:wrap"><img class="thumb" loading="lazy" src="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/thumb.jpg" onerror="this.style.visibility='hidden'">
           <div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}</div>
-          <div class="fa sm">${when} · ${x.frames} layers${x.mb ? " · " + x.mb + " MB" : ""}</div></div><div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:96px">${btn.replace(/ style="margin-right:6px"/g, "")}</div></div>`; }).join("")
+          <div class="fa sm">${when} · ${x.frames ? x.frames + " layers" : "added video"}${x.mb ? " · " + x.mb + " MB" : ""}</div></div><div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:96px">${btn.replace(/ style="margin-right:6px"/g, "")}</div></div>`; }).join("")
         : '<div class="mu">None yet. The Pi records one frame per layer of every print.</div>';
       $("#tPi").querySelectorAll("[data-mk]").forEach(b => b.onclick = async () => { try { await api("/api/timelapse/" + encodeURIComponent(b.dataset.mk) + "/render", {}); toast("Making the video..."); this.loadPi(); } catch (e) { toast(e.message); } });
       if (busy && $("#tPi")) this.piT = setTimeout(() => this.loadPi(), 4000);
@@ -1614,6 +1617,67 @@ VIEWS.queue = {
   update(s) { const c = (s.queue || {}).count; if (c !== this.c) { this.c = c; this.load(); } }
 };
 
+// ---------- Pi admin (only in the admin app on the Pi itself)
+VIEWS.piadmin = {
+  build(el) {
+    el.innerHTML = `
+    <div class="card"><div class="h">Kick people off the web link</div>
+      <div class="mu sm" style="margin-bottom:10px">Logs them out right away. They need the code again to get back in. The Owner tab lists each person if you want to kick just one.</div>
+      <div class="row w"><button class="btn sm bad" data-ka="general">Everyone on the general code</button><button class="btn sm bad" data-ka="master">Everyone on the master code</button><button class="btn sm bad" data-ka="all">Everyone</button></div></div>
+    <div class="card"><div class="h">Codes</div>
+      <div class="row" style="margin-bottom:8px"><span style="width:110px">General code</span><input type="text" id="paG" class="grow" maxlength="32" placeholder="New general code"><button class="btn sm pri" id="paGs">Change</button></div>
+      <div class="row"><span style="width:110px">Master code</span><input type="text" id="paM" class="grow" maxlength="32" placeholder="New master code"><button class="btn sm pri" id="paMs">Change</button></div>
+      <div class="mu sm" style="margin-top:8px">Changing a code logs out everyone using the old one.</div></div>
+    <div class="card"><div class="h">Add a video to Videos</div>
+      <div class="mu sm" style="margin-bottom:10px">Pick any .mp4 on this Pi. It shows up in the Videos tab with its file name.</div>
+      <div class="row"><button class="btn sm pri" id="paVid">Pick a video...</button><span class="mu sm grow" id="paVidMsg"></span></div></div>
+    <div class="card"><div class="row"><div class="h grow" style="margin:0">Update and restart</div><span class="chip" id="paJob">-</span></div>
+      <div class="mu sm" style="margin:8px 0 10px">Update downloads the newest PrintView from GitHub and restarts it (a minute or two). Wait for any timelapse video being made to finish first.</div>
+      <div class="row w"><button class="btn sm pri" id="paUpd">Update PrintView</button><button class="btn sm" id="paRst">Restart only</button></div>
+      <pre class="flow" id="paLog" style="display:none"></pre></div>
+    <div class="card"><div class="row"><div class="h grow" style="margin:0">Logs</div><button class="btn sm" data-lg="printwatch">PrintView</button><button class="btn sm" data-lg="camview" style="margin-left:6px">Web link</button></div>
+      <pre class="flow" id="paLogs">Pick one.</pre></div>`;
+    el.querySelectorAll("[data-ka]").forEach(b => b.onclick = () => confirmBox(b.textContent + "?", "They're logged out of the web link now.", "Kick", async () => {
+      try { await api("/admin/kick_all", {role: b.dataset.ka}); toast("Done"); } catch (e) { toast(e.message); }
+    }, true));
+    $("#paGs").onclick = async () => { try { await api("/admin/code", {code: $("#paG").value.trim()}); $("#paG").value = ""; toast("General code changed"); } catch (e) { toast(e.message); } };
+    $("#paMs").onclick = async () => { try { await api("/admin/master_code", {code: $("#paM").value.trim()}); $("#paM").value = ""; toast("Master code changed"); } catch (e) { toast(e.message); } };
+    $("#paVid").onclick = () => {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "video/mp4,.mp4,.mov,.m4v";
+      inp.onchange = () => {
+        const f = inp.files[0]; if (!f) return;
+        const x = new XMLHttpRequest(), m = $("#paVidMsg");
+        x.open("POST", "/api/timelapse/import?name=" + encodeURIComponent(f.name));
+        x.setRequestHeader("Content-Type", "application/octet-stream"); x.setRequestHeader("X-PW", "1");
+        x.upload.onprogress = e => { if (e.lengthComputable) m.textContent = "Adding " + f.name + " - " + Math.round(e.loaded / e.total * 100) + "%"; };
+        x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {} m.textContent = x.status === 200 && j.ok ? "Added: " + j.name + " (" + j.mb + " MB). It's in the Videos tab." : "Failed: " + (j.error || "HTTP " + x.status); };
+        x.onerror = () => m.textContent = "Failed: connection lost";
+        m.textContent = "Adding " + f.name + " - 0%"; x.send(f);
+      };
+      inp.click();
+    };
+    const job = async (url, what) => confirmBox(what + "?", "PrintView restarts. The page reconnects by itself.", what, async () => {
+      try { await api(url, {}); $("#paLog").style.display = ""; this.watch(); } catch (e) { toast(e.message); }
+    });
+    $("#paUpd").onclick = () => job("/pvadmin/update", "Update PrintView");
+    $("#paRst").onclick = () => job("/pvadmin/restart", "Restart PrintView");
+    el.querySelectorAll("[data-lg]").forEach(b => b.onclick = async () => { $("#paLogs").textContent = "Loading..."; try { const r = await (await fetch("/pvadmin/logs?c=" + b.dataset.lg)).json(); $("#paLogs").textContent = r.text || "(empty)"; $("#paLogs").scrollTop = 1e9; } catch (e) { $("#paLogs").textContent = e.message; } });
+    this.watch();
+  },
+  async watch() {
+    clearTimeout(this.t);
+    if (!$("#paJob")) return;
+    try {
+      const j = await (await fetch("/pvadmin/job", {cache: "no-store"})).json();
+      $("#paJob").textContent = j.running ? "Working..." : j.ok === true ? "Done" : j.ok === false ? "Failed" : "Idle";
+      $("#paJob").style.color = j.running ? "var(--ac)" : j.ok === true ? "var(--ok)" : j.ok === false ? "var(--bad)" : "";
+      if (j.log) { $("#paLog").style.display = ""; $("#paLog").textContent = j.log; $("#paLog").scrollTop = 1e9; }
+      $("#paUpd").disabled = $("#paRst").disabled = j.running;
+      this.t = setTimeout(() => this.watch(), j.running ? 1500 : 8000);
+    } catch (e) { this.t = setTimeout(() => this.watch(), 3000); }   // the admin app itself restarts after an update
+  }
+};
+
 // ---------- the tabs
 VIEWS.control = compose(["controls", ["speed", "temps", "fans"]], ["controls", ["move", "options", "calib"], () => !readOnly], ["controls", ["gcode"], () => role === "master" && !readOnly]);
 VIEWS.printtab = compose(["job", null, printing], ["queue"], ["print"]);
@@ -1679,7 +1743,7 @@ VIEWS.admin = {
       $("#aList").innerHTML = s.sessions.length ? s.sessions.map(r => `<div><div class="grow"><div style="font-weight:600">${esc(r.device)}${r.me ? ' <span class="mu sm">(this browser)</span>' : ""}</div>
           <div class="fa sm">${esc(r.ip || "?")} · ${ago(r.seen_s)} · since ${new Date(r.since * 1000).toLocaleDateString()}</div></div>
           <span class="chip" style="color:${r.role === "master" ? "var(--ac)" : s.frozen ? "var(--bad)" : "var(--mu)"}">${r.role === "master" ? "master" : s.frozen ? "frozen" : "general"}</span>
-          ${r.role === "general" ? `<button class="btn sm bad" data-kick="${esc(r.id)}">Log out</button>` : ""}</div>`).join("") : '<div class="mu">Nobody.</div>';
+          ${r.role === "general" || window.PV_ADMIN ? `<button class="btn sm bad" data-kick="${esc(r.id)}">Log out</button>` : ""}</div>`).join("") : '<div class="mu">Nobody.</div>';
       $("#aList").querySelectorAll("[data-kick]").forEach(b => b.onclick = async () => { try { await api("/admin/kick", {id: b.dataset.kick}); toast("Logged out"); this.load(); } catch (e) { toast(e.message); } });
       const ex = await api("/admin/exercise");
       $("#exChip").textContent = ex.running ? "running" : "off"; $("#exChip").style.color = ex.running ? "var(--ok)" : "";

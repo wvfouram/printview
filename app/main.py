@@ -136,6 +136,7 @@ def build_app():
     app.router.add_get("/api/timelapse/{tid}/timelapse.mp4", api_tl_video)
     app.router.add_get("/api/timelapse/{tid}/thumb.jpg", api_tl_thumb)
     app.router.add_get("/lan/tl/{tid}/{tok}", lan_tl_page)
+    app.router.add_post("/api/timelapse/import", api_tl_import)
     app.router.add_get("/lan/tl/{tid}/{tok}/video.mp4", lan_tl_file)
     app.router.add_get("/api/stream", api_stream)
     app.router.add_post("/api/cmd", api_cmd)
@@ -366,6 +367,39 @@ async def api_tl_list(request):
         it["lan_token"] = _lan_token(request.app, it["id"])
     return web.json_response({"status": tl.status(), "items": items,
                               "lan": {"ip": _lan_ip(request.app), "port": int(env("PORT", "8080"))}})
+
+
+async def api_tl_import(request):
+    """Add a finished video (from the Pi admin app) to the Videos list. Not reachable through the web link."""
+    if request.get("remote"):
+        raise web.HTTPForbidden()
+    name = re.sub(r'[\\/:*?"<>|\r\n]+', "_", os.path.basename(request.query.get("name", "video")))
+    name = re.sub(r"(?i)\.(mp4|mov|m4v)$", "", name)[:120] or "video"
+    root = request.app["timelapse"].root
+    d = os.path.join(root, time.strftime("%Y-%m-%d_%H%M%S"))
+    k = 1
+    while os.path.exists(d):
+        k += 1
+        d = os.path.join(root, time.strftime("%Y-%m-%d_%H%M%S") + f"-{k}")
+    os.makedirs(os.path.join(d, "frames"))
+    tmp, got = os.path.join(d, "upload.tmp"), 0
+    try:
+        with open(tmp, "wb") as f:
+            async for chunk in request.content.iter_chunked(1 << 20):
+                got += len(chunk)
+                if got > 8 * 1024 ** 3:
+                    raise ValueError("too big (8 GB max)")
+                f.write(chunk)
+        if got < 1000:
+            raise ValueError("empty file")
+        os.replace(tmp, os.path.join(d, "timelapse.mp4"))
+        with open(os.path.join(d, "meta.json"), "w") as f:
+            json.dump({"job": name, "frames": 0, "t": int(time.time()), "done": True, "imported": True}, f)
+    except Exception as e:  # noqa: BLE001
+        shutil.rmtree(d, ignore_errors=True)
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    request.app["timelapse"]._make_web(os.path.basename(d))
+    return web.json_response({"ok": True, "id": os.path.basename(d), "name": name, "mb": round(got / 1e6, 1)})
 
 
 async def lan_tl_page(request):

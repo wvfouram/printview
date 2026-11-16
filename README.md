@@ -129,6 +129,16 @@ You'll get alerts for failures, auto-pauses, finished prints and a weekly report
 
 ---
 
+### PrintView Admin (on the Pi itself)
+
+A "PrintView Admin" app on the Pi's desktop: the whole website with owner powers and no codes, plus kicking anyone off the web link (master users too), changing both codes, adding videos from the Pi's folders, logs, and a one-button update. It only works on the Pi itself, so whoever is logged in to the Pi is the admin.
+
+```bash
+cd ~/printview && ./pvadmin/install_admin.sh
+```
+
+Then open **PrintView Admin** from the desktop icon or the menu.
+
 ## Updating
 
 ```bash
