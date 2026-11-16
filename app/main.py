@@ -362,7 +362,14 @@ async def api_tl_video(request):
     p = request.app["timelapse"].video_path(request.match_info["tid"], web=request.query.get("web") == "1")
     if not p:
         raise web.HTTPNotFound()
-    return web.FileResponse(p, headers={"Content-Type": "video/mp4"})   # supports Range, so players can seek
+    tid = request.match_info["tid"]
+    job = (request.app["timelapse"]._meta(os.path.join(request.app["timelapse"].root, tid)).get("job") or tid)
+    name = re.sub(r"(?i)(\.gcode)?\.3mf$", "", os.path.basename(str(job))) or "timelapse"
+    name = re.sub(r'[\\/:*?"<>|\r\n]+', "_", name)[:120] + ".mp4"
+    from urllib.parse import quote
+    disp = ("attachment" if request.query.get("dl") == "1" else "inline") + \
+        f'; filename="{name.encode("ascii", "replace").decode().replace("?", "_")}"; filename*=UTF-8\'\'{quote(name)}'
+    return web.FileResponse(p, headers={"Content-Type": "video/mp4", "Content-Disposition": disp})   # Range works
 
 
 async def api_status(request):
