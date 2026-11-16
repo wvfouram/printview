@@ -43,6 +43,7 @@ class Timelapse:
         self.root = os.path.join(data_dir, "timelapse")
         os.makedirs(self.root, exist_ok=True)
         self.job_dir = None
+        self._odd_since = None
         self.layer = None
         self.count = 0
         self.cands = []           # (thumb, jpeg) for the current layer
@@ -159,9 +160,9 @@ class Timelapse:
         except (OSError, ValueError):
             return {}
 
-    def _save_meta(self, job):
+    def _save_meta(self, job, done=False):
         with open(os.path.join(self.job_dir, "meta.json"), "w") as f:
-            json.dump({"job": job, "frames": self.count, "t": int(time.time())}, f)
+            json.dump({"job": job, "frames": self.count, "t": int(time.time()), "done": done}, f)
 
     def _keep_best(self, job):
         if not self.cands:
@@ -189,6 +190,21 @@ class Timelapse:
         self._save_meta(job)
 
     def _start(self, job):
+        # Same print picked up again (PrintView restarted, the printer dropped off Wi-Fi during a long pause...):
+        # keep adding to its timelapse instead of starting a second one.
+        try:
+            last = sorted(n for n in os.listdir(self.root) if os.path.isdir(os.path.join(self.root, n)))[-1:]
+        except OSError:
+            last = []
+        if last:
+            d = os.path.join(self.root, last[0])
+            m = self._meta(d)
+            if m.get("job") == job and not m.get("done") and time.time() - m.get("t", 0) < 12 * 3600 \
+                    and not os.path.exists(os.path.join(d, "timelapse.mp4")):
+                self.job_dir = d
+                self.count, self.cands, self.ref, self.layer, self.base = int(m.get("frames", 0)), [], [], None, None
+                self.msg = f"Recording {job} (continued)"
+                return
         name = time.strftime("%Y-%m-%d_%H%M%S")
         self.job_dir = os.path.join(self.root, name)
         os.makedirs(os.path.join(self.job_dir, "frames"), exist_ok=True)
@@ -198,6 +214,7 @@ class Timelapse:
 
     def _finish(self, job, ok):
         self._keep_best(job)
+        self._save_meta(job, done=True)
         d, n = self.job_dir, self.count
         self.job_dir = None
         if n >= 10:
@@ -220,8 +237,14 @@ class Timelapse:
                         self.msg = f"Not recording: needs {MIN_FREE_GB:.0f} GB free (SSD)"
                     continue
                 if state not in ACTIVE:
-                    self._finish(job, state == "FINISH")
+                    # only a real end finishes the timelapse; a moment of "unknown" (Wi-Fi drop) doesn't
+                    if state in ("FINISH", "FAILED", "IDLE") or time.time() - (self._odd_since or time.time()) > 600:
+                        self._odd_since = None
+                        self._finish(job, state == "FINISH")
+                    elif self._odd_since is None:
+                        self._odd_since = time.time()
                     continue
+                self._odd_since = None
                 if state != "RUNNING" or not layer:
                     continue
                 if self.layer is not None and layer != self.layer:
