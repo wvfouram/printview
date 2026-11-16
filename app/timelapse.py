@@ -286,7 +286,6 @@ class Timelapse:
             f"minterpolate=fps={OUT_FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
             f"scale={OUT_W}:-2:flags=lanczos",
             "unsharp=5:5:0.25:5:5:0",              # gentle, luma only (stronger made the grain worse)
-            "tpad=stop_mode=clone:stop_duration=3",
         ])
         cmd = ["nice", "-n", "19", "ffmpeg", "-y", "-loglevel", "error",
                "-framerate", str(IN_FPS), "-i", os.path.join(d, "frames", "%05d.jpg"),
@@ -298,7 +297,7 @@ class Timelapse:
             n_in = len([n for n in os.listdir(os.path.join(d, "frames")) if n.endswith(".jpg")])
         except OSError:
             n_in = 0
-        total = max(1, int(n_in / IN_FPS * OUT_FPS + 3 * OUT_FPS))
+        total = max(1, int(n_in / IN_FPS * OUT_FPS))
         t0 = time.time()
         self.progress = {"pct": 0, "eta_s": None, "started": int(t0)}
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
