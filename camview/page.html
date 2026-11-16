@@ -1271,7 +1271,7 @@ VIEWS.print = {
         const opts = trays.map(t => `<option value="${t.slot}">${amsName(t.unit)}·${t.tray}  ${esc(t.empty ? "empty" : t.type)}</option>`).join("") + `<option value="254">External spool${ext && ext.type ? " " + esc(ext.type) : ""}</option>`;
         box.innerHTML = `<div class="card"><div class="row" style="align-items:flex-start;gap:14px">
             <img src="${BASE}/api/files/plate.png?path=${encodeURIComponent(f.path)}&plate=${plate.index}" style="width:120px;height:120px;border-radius:14px;background:var(--s2);object-fit:contain">
-            <div class="grow"><div style="font-weight:650;font-size:17px">${esc(f.title)}</div>
+            <div class="grow" style="min-width:0"><div style="font-weight:650;font-size:17px;overflow-wrap:anywhere">${esc(f.title)}</div>
             <div class="mu sm">${mins(plate.seconds / 60)}${plate.weight_g ? " · " + Math.round(plate.weight_g) + " g" : ""}</div>
             ${plates.length > 1 ? `<div class="seg" id="pPl" style="margin-top:10px">${plates.map(p => `<button data-v="${p.index}">Plate ${p.index}</button>`).join("")}</div>` : ""}</div></div>
           <div class="div"></div><div class="row"><div class="h grow" style="margin:0">3D preview</div><span class="fa sm" id="p3dInfo"></span></div>
