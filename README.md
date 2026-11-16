@@ -104,6 +104,17 @@ Anyone with that link can **watch**. Controlling the printer needs your general 
 3. In the app, tap the **gear icon**, type the address from Step 4 (like `http://192.168.1.60:8080`), and tap **Save**.
 4. Do this the first time while the phone is on your home Wi-Fi. The app pairs with the Pi by itself and then also works away from home.
 
+### iPhone
+
+There's no iPhone app, but the website does almost everything the Android app does (everything except the floating camera and live sound).
+
+1. Set up the public web link (Step 5).
+2. Open your public link in **Safari**.
+3. Tap the **Share** button, then **Add to Home Screen**, then **Add**.
+4. Open it from the new icon on your home screen. It opens full screen like an app, at home or away.
+
+Phone alerts work on iPhone too: the ntfy app is on the App Store (Step 7).
+
 ### Step 7 (optional): Phone alerts
 
 1. Install the **ntfy** app on your phone.
