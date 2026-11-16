@@ -32,6 +32,7 @@ from .devinfo import DevInfo
 from .platecheck import PlateCheck
 from .usbcam import USBCam
 from .usbaudio import USBAudio
+from .printqueue import PrintQueue
 from . import remote as rm
 from .store import Events, Notifier, Settings
 from .trainer import Trainer
@@ -112,6 +113,7 @@ def build_app():
     app["devinfo"] = DevInfo(printer)
     app["usbcam"] = USBCam()
     app["usbaudio"] = USBAudio()
+    app["queue"] = PrintQueue(printer, data_dir, lambda b: _start_from_body(app, b), events)
     app["plate"] = PlateCheck(printer, camera, detector, notifier, events, settings, data_dir)
     app["history"] = History(printer, camera, data_dir, app["timelapse"])
     threading.Thread(target=_weekly_report, args=(app, data_dir), daemon=True, name="report").start()
@@ -139,6 +141,11 @@ def build_app():
     app.router.add_get("/snapshot.jpg", snapshot)
     app.router.add_get("/cam2.jpg", cam2_jpg)
     app.router.add_get("/api/audio.pcm", audio_pcm)
+    app.router.add_get("/api/queue", api_queue)
+    app.router.add_post("/api/queue", api_queue_add)
+    app.router.add_post("/api/queue/next", api_queue_next)
+    app.router.add_post("/api/queue/{qid}/remove", api_queue_remove)
+    app.router.add_post("/api/queue/{qid}/move", api_queue_move)
     app.router.add_get("/detection.jpg", detection_jpg)
     app.router.add_get("/stream.mjpg", mjpeg)
     app.router.add_post("/api/pair", api_pair)
@@ -330,6 +337,7 @@ def full_status(app):
         "plate": app["plate"].status(),
         "cam2": app["usbcam"].status(),
         "audio": app["usbaudio"].status(),
+        "queue": app["queue"].status(),
     }
 
 
@@ -453,6 +461,35 @@ async def snapshot(request):
         raise web.HTTPNotModified()
     return web.Response(body=frame, content_type="image/jpeg",
                         headers={"Cache-Control": "no-cache", "ETag": etag})
+
+
+async def api_queue(request):
+    return web.json_response({"items": request.app["queue"].list()})
+
+
+async def api_queue_add(request):
+    try:
+        it = request.app["queue"].add(await request.json())
+    except (ValueError, TypeError) as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "item": it})
+
+
+async def api_queue_next(request):
+    try:
+        it = await _run(request.app["queue"].start_next)
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "item": it})
+
+
+async def api_queue_remove(request):
+    return web.json_response({"ok": request.app["queue"].remove(request.match_info["qid"])})
+
+
+async def api_queue_move(request):
+    b = await request.json()
+    return web.json_response({"ok": request.app["queue"].move(request.match_info["qid"], int(b.get("delta", 0)))})
 
 
 async def audio_pcm(request):

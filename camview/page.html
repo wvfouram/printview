@@ -133,6 +133,10 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
 .ro #views .btn,.ro #views input[type=number],.ro #views textarea,.ro #views label.ck input,.ro .ro-hide{display:none!important}
 .ro #views input,.ro #views select,.ro #views .seg,.ro #views .sw,.ro #views .slot{pointer-events:none}
 .ro #views .sw{opacity:.75}
+.ro #views .btn.ro-ok{display:inline-flex!important}
+.ro #views .v3d-ctl input{pointer-events:auto}
+.ro #views .sched{display:none}
+.sn{filter:blur(5px);user-select:none;transition:filter .2s}.sn.show{filter:none;user-select:text}.sn.tap{cursor:pointer}
 .robar{display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-top:14px;font-size:13px;color:var(--mu)}
 .pthumb{width:52px;height:52px;flex:none;border-radius:10px;background:var(--s2);object-fit:contain;margin-right:12px}
 .v3d-wait{height:var(--v3d-h,380px);display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;border-radius:14px;background:var(--s2);color:var(--mu)}
@@ -177,6 +181,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
           <div class="stat"><span class="mu sm">Nozzle</span><b class="num" id="wNoz">--</b></div>
           <div class="stat"><span class="mu sm">Bed</span><b class="num" id="wBed">--</b></div></div>
         <div class="row ro-hide" style="margin-top:14px"><button class="btn pri grow" id="wPause" style="flex:2"></button><button class="btn bad grow" id="wStop"></button></div>
+        <div class="row ro-hide hide" id="wNextRow" style="margin-top:10px"><button class="btn go grow" id="wNext"></button></div>
       </div>
       <div class="lock card hide" id="lockCard">
         <div class="h" style="margin-bottom:6px" id="lockTitle">Controls locked</div>
@@ -732,7 +737,7 @@ function compose(...parts) {
 }
 const printing = () => status && active(status.printer.state);
 const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["videos", "Videos"], ["printer", "Printer"]];
-const RO_TABS = [["control", "Settings"], ["amstab", "AMS"], ["printer", "Printer"]];
+const RO_TABS = TABS;      // the public sees every tab (read-only); only Owner needs the master code
 function tabList() { return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Owner"]]) : TABS; }
 function renderTabs() {
   const tabs = tabList();
@@ -773,6 +778,14 @@ const NOW = {
     pb.disabled = !p.connected || !(paused || p.state === "RUNNING");
     pb.onclick = () => cmd(paused ? "resume" : "pause", null, paused ? "Resuming..." : "Pausing...");
     $("#wStop").disabled = !(p.connected && act);
+    const q = s.queue || {}, free = p.connected && ["IDLE", "FINISH", "FAILED"].includes(p.state);
+    $("#wNextRow").classList.toggle("hide", !(q.next && free && !readOnly));
+    if (q.next) {
+      $("#wNext").innerHTML = IC.play + "Start next: " + esc(q.next.name.replace(/(\.gcode)?\.3mf$/i, "")) + (q.count > 1 ? ` <span style="opacity:.7">(+${q.count - 1} more)</span>` : "");
+      $("#wNext").onclick = () => confirmBox("Start the next print?", q.next.name + "\nMake sure the plate is clear.", "Start", async () => {
+        try { await api("/api/queue/next", {}); toast("Starting " + q.next.name); if (VIEWS.queue.load && $("#qList")) VIEWS.queue.load(); } catch (e) { toast(e.message); }
+      });
+    }
     const w = watchState(s);
     $("#wWatch").textContent = "Spaghetti: " + w.text; $("#wWatch").style.color = w.color;
   }
@@ -994,8 +1007,9 @@ VIEWS.controls = {
       $("#cInfo").innerHTML = `<dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
     }
     const mods = dv.modules || [];
-    if ($("#cDev")) $("#cDev").innerHTML = (dv.updates && dv.updates.length ? `<div style="color:var(--ac);margin-bottom:8px">Firmware update available: ${dv.updates.map(u => esc(u.name) + " " + esc(u.cur) + " → " + esc(u.new)).join(", ")}</div>` : "")
-      + (mods.length ? `<div class="list">${mods.map(m => `<div><div class="grow"><div style="font-weight:600">${esc(m.name)}</div><div class="fa sm">SN ${esc(m.sn || "-")}</div></div><span class="num sm">${esc(m.sw || "-")}</span></div>`).join("")}</div>`
+    if ($("#cDev") && !$("#cDev").onclick) $("#cDev").onclick = e => { const t = e.target.closest(".sn.tap"); if (t) t.classList.toggle("show"); };
+    if ($("#cDev") && JSON.stringify(dv.modules || []) === $("#cDev").dataset.sig) { /* unchanged: keep revealed state */ } else if ($("#cDev")) $("#cDev").dataset.sig = JSON.stringify(dv.modules || []), $("#cDev").innerHTML = (dv.updates && dv.updates.length ? `<div style="color:var(--ac);margin-bottom:8px">Firmware update available: ${dv.updates.map(u => esc(u.name) + " " + esc(u.cur) + " → " + esc(u.new)).join(", ")}</div>` : "")
+      + (mods.length ? `<div class="list">${mods.map(m => `<div><div class="grow"><div style="font-weight:600">${esc(m.name)}</div><div class="fa sm">SN <span class="sn${m.sn ? " tap" : ""}" ${m.sn ? 'title="Tap to show"' : 'title="Master code only"'}>${esc(m.sn || "0000000000000000")}</span></div></div><span class="num sm">${esc(m.sw || "-")}</span></div>`).join("")}</div>`
         : '<div class="mu sm">Asking the printer...</div>');
   }
 };
@@ -1207,7 +1221,7 @@ VIEWS.print = {
       const files = Array.isArray(j) ? j : j.list || [];
       $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=1&path=${encodeURIComponent(f.path)}" onerror="this.style.visibility='hidden'"><div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(f.title)}">${esc(f.title)}</div>
         <div class="fa sm">${esc(f.date || "")} · ${(f.size / 1e6).toFixed(1)} MB</div></div>
-        <a class="btn sm icon" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download title="Download" aria-label="Download">${IC.dl}</a>
+        <a class="btn sm icon ro-ok" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download title="Download" aria-label="Download">${IC.dl}</a>
         <button class="btn sm bad icon" data-del="${i}" title="Delete" aria-label="Delete">${IC.trash}</button><span class="fa">›</span></div>`).join("") : '<div class="mu">No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer.</div>';
       $("#pList").querySelectorAll("[data-i]").forEach(r => r.onclick = () => this.open(files[+r.dataset.i]));
       $("#pList").querySelectorAll("[data-dl]").forEach(a => a.onclick = e => e.stopPropagation());
@@ -1269,7 +1283,7 @@ VIEWS.print = {
           <label class="ck"><input type="checkbox" id="oLvl" checked>Bed leveling</label>
           <label class="ck"><input type="checkbox" id="oVib" checked>Vibration calibration</label><label class="ck"><input type="checkbox" id="oTl">Timelapse</label>
           <div class="row" style="margin-top:8px"><span class="grow">Speed</span><select id="oSpd"><option value="1">Silent</option><option value="2" selected>Standard</option><option value="3">Sport</option><option value="4">Ludicrous</option></select></div>
-          <button class="btn pri" id="pStart" style="width:100%;margin-top:12px">Start print</button>
+          <div class="row" style="margin-top:12px"><button class="btn pri grow" id="pStart">Start print</button><button class="btn grow" id="pQueue">Add to queue</button></div>
           <div class="sched" id="pSchedBox"></div></div>`;
         load3d(f, plate);
         if (plates.length > 1) { paintSeg("#pPl", plate.index); box.querySelectorAll("#pPl button").forEach(b => b.onclick = () => { plate = plates.find(p => p.index === +b.dataset.v); draw(); }); }
@@ -1288,6 +1302,9 @@ VIEWS.print = {
             try { await api("/api/schedule", Object.assign(mkBody(), {at})); toast("Scheduled for " + fmtWhen(at)); VIEWS.print.load(false); } catch (e) { toast(e.message); }
           });
         });
+        $("#pQueue").onclick = async () => {
+          try { await api("/api/queue", mkBody()); toast("Added to the queue"); VIEWS.queue.load(); } catch (e) { toast(e.message); }
+        };
         $("#pStart").onclick = () => {
           const map = fil.map(fl => [fl.id, +box.querySelector(`[data-fid="${fl.id}"]`).value]);
           const useExt = map.some(m => m[1] === 254);
@@ -1368,7 +1385,7 @@ VIEWS.history = {
         ${x.photo ? `<img src="${BASE}/api/history/photo/${x.photo}" loading="lazy" style="width:120px;border-radius:10px">` : '<div style="width:120px;height:68px;border-radius:10px;background:var(--s2)"></div>'}
         <div class="grow"><b>${esc(x.job)}</b><div class="fa sm">${new Date(x.end * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})} · ${mins(x.minutes)}${x.layers ? " · " + x.layers + " layers" : ""}</div>
         <div class="sm" style="color:${x.result === "done" ? "var(--ok)" : "var(--bad)"}">${x.result === "done" ? "Finished" : "Failed / stopped"}</div>
-        ${x.timelapse ? `<a class="btn sm" style="margin-top:6px" href="${BASE}/api/timelapse/${x.timelapse}/timelapse.mp4" target="_blank">Timelapse</a>` : ""}</div></div>`).join("") : '<div class="mu">Prints show up here when they finish.</div>';
+        ${x.timelapse ? `<a class="btn sm ro-ok" style="margin-top:6px" href="${BASE}/api/timelapse/${x.timelapse}/timelapse.mp4" target="_blank">Timelapse</a>` : ""}</div></div>`).join("") : '<div class="mu">Prints show up here when they finish.</div>';
     } catch (e) { $("#hList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
   }
 };
@@ -1413,7 +1430,7 @@ VIEWS.timelapses = {
       const busy = v.some(x => x.rendering || x.queued);
       $("#tPi").innerHTML = v.length ? v.map(x => {
         const when = new Date((x.t || 0) * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
-        const btn = (x.video && !x.rendering && !x.queued) ? `<a class="btn sm" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4?web=1" target="_blank" rel="noopener" style="margin-right:6px">Play</a><a class="btn sm" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" target="_blank" rel="noopener" style="margin-right:6px">Play HD</a><a class="btn sm" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" download="${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}.mp4" style="margin-right:6px">Download</a><button class="btn sm" data-mk="${esc(x.id)}" title="Make the video again with the latest settings">Redo</button>`
+        const btn = (x.video && !x.rendering && !x.queued) ? `<a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4?web=1" target="_blank" rel="noopener" style="margin-right:6px">Play</a><a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" target="_blank" rel="noopener" style="margin-right:6px">Play HD</a><a class="btn sm ro-ok" href="${BASE}/api/timelapse/${encodeURIComponent(x.id)}/timelapse.mp4" download="${esc((x.job || x.id).replace(/(\.gcode)?\.3mf$/i, ""))}.mp4" style="margin-right:6px">Download</a><button class="btn sm" data-mk="${esc(x.id)}" title="Make the video again with the latest settings">Redo</button>`
           : x.rendering ? `<div style="min-width:220px"><div class="row" style="gap:8px"><span class="sm grow" style="color:var(--ac)">Making video ${x.progress ? x.progress.pct.toFixed(0) + "%" : "..."}</span><span class="fa sm">${x.progress && x.progress.eta_s != null ? "~" + (x.progress.eta_s >= 3600 ? Math.floor(x.progress.eta_s / 3600) + "h " : "") + Math.round(x.progress.eta_s % 3600 / 60) + "m left" : ""}</span></div>
               <div class="bar" style="height:6px;margin-top:6px"><i style="width:${x.progress ? x.progress.pct : 0}%;background:var(--ac)"></i></div></div>` : x.queued ? '<span class="chip">Queued</span>'
           : `<button class="btn sm pri" data-mk="${esc(x.id)}">Make video</button>`;
@@ -1432,7 +1449,7 @@ VIEWS.timelapses = {
       const v = Array.isArray(j) ? j : j.list || [];
       $("#tList").innerHTML = v.length ? v.map(x => `<div>${x.thumb ? `<img class="thumb" loading="lazy" src="${BASE}/api/timelapses/thumb?path=${encodeURIComponent(x.thumb)}">` : '<div class="thumb"></div>'}
         <div class="grow"><div style="font-weight:600;word-break:break-all">${esc(x.name)}</div><div class="fa sm">${esc(x.date || "")} · ${(x.size / 1e6).toFixed(1)} MB</div></div>
-        <a class="btn sm" href="${BASE}/api/timelapses/download?path=${encodeURIComponent(x.path)}" download>Download</a></div>`).join("") : '<div class="mu">No timelapses on the SD card.</div>';
+        <a class="btn sm ro-ok" href="${BASE}/api/timelapses/download?path=${encodeURIComponent(x.path)}" download>Download</a></div>`).join("") : '<div class="mu">No timelapses on the SD card.</div>';
     } catch (e) { $("#tList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
   }
 };
@@ -1568,13 +1585,42 @@ VIEWS.flow = {
   }
 };
 
+// ---------- Print queue
+VIEWS.queue = {
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Print queue</div><button class="btn sm go ro-hide" id="qNext">Start next</button></div>
+      <div class="mu sm" style="margin-top:6px">Open a file below and tap "Add to queue". Nothing starts by itself: when a print is done, tap Start next.</div>
+      <div class="list" id="qList" style="margin-top:8px"><div class="mu sm">Loading...</div></div></div>`;
+    $("#qNext").onclick = () => confirmBox("Start the next print?", "Make sure the plate is clear.", "Start", async () => {
+      try { const j = await api("/api/queue/next", {}); toast("Starting " + j.item.name); this.load(); } catch (e) { toast(e.message); }
+    });
+    this.load();
+  },
+  async load() {
+    if (!$("#qList")) return;
+    try {
+      const it = (await api("/api/queue")).items || [];
+      $("#qList").innerHTML = it.length ? it.map((x, i) => `<div><span class="chip num">${i + 1}</span>
+        <img class="pthumb" style="width:40px;height:40px;margin:0" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=${x.plate}&path=${encodeURIComponent(x.body.path)}" onerror="this.style.visibility='hidden'">
+        <div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.name.replace(/(\.gcode)?\.3mf$/i, ""))}</div>
+        <div class="fa sm">Plate ${x.plate}${x.body.speed && x.body.speed != 2 ? " · " + ["", "Silent", "Standard", "Sport", "Ludicrous"][x.body.speed] : ""}</div></div>
+        <span class="ro-hide" style="display:flex;gap:4px"><button class="btn sm icon" data-qm="${x.id}" data-d="-1" title="Move up" ${i ? "" : "disabled"}>↑</button><button class="btn sm icon" data-qm="${x.id}" data-d="1" title="Move down" ${i < it.length - 1 ? "" : "disabled"}>↓</button>
+        <button class="btn sm bad icon" data-qr="${x.id}" title="Remove">${IC.trash}</button></span></div>`).join("") : '<div class="mu sm">The queue is empty.</div>';
+      $("#qNext").disabled = !it.length;
+      $("#qList").querySelectorAll("[data-qm]").forEach(b => b.onclick = async () => { try { await api("/api/queue/" + b.dataset.qm + "/move", {delta: +b.dataset.d}); this.load(); } catch (e) { toast(e.message); } });
+      $("#qList").querySelectorAll("[data-qr]").forEach(b => b.onclick = async () => { try { await api("/api/queue/" + b.dataset.qr + "/remove", {}); this.load(); } catch (e) { toast(e.message); } });
+    } catch (e) { $("#qList").innerHTML = `<div style="color:var(--bad)" class="sm">${esc(e.message)}</div>`; }
+  },
+  update(s) { const c = (s.queue || {}).count; if (c !== this.c) { this.c = c; this.load(); } }
+};
+
 // ---------- the tabs
 VIEWS.control = compose(["controls", ["speed", "temps", "fans"]], ["controls", ["move", "options", "calib"], () => !readOnly], ["controls", ["gcode"], () => role === "master" && !readOnly]);
-VIEWS.printtab = compose(["job", null, printing], ["print"]);
+VIEWS.printtab = compose(["job", null, printing], ["queue"], ["print"]);
 VIEWS.amstab = compose(["ams"], ["controls", ["amsopts"]]);
 VIEWS.safety = compose(["watch"], ["controls", ["plate"]], ["train"]);
 VIEWS.videos = compose(["timelapses"], ["history"]);
-VIEWS.printer = compose(["controls", ["info"]], ["activity", null, () => !readOnly], ["controls", ["firmware"], () => !readOnly], ["flow", null, () => role === "master" && !readOnly]);
+VIEWS.printer = compose(["controls", ["info"]], ["activity"], ["controls", ["firmware"]], ["flow", null, () => role === "master" && !readOnly]);
 
 // ---------- Command center (master code only)
 VIEWS.admin = {

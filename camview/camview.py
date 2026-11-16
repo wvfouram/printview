@@ -57,6 +57,22 @@ def tag_for(role):
 BLOCKED = ("/api/pair", "/api/remote", "/api/login", "/api/camview", "/api/bed/")
 # What anyone with the link (no code, or frozen) may read. Nothing that changes anything.
 READ_ONLY = ("/api/status", "/api/job", "/api/job/plate.png")
+# Anyone with the link may look at (GET) everything else too, except these. Nothing that changes anything
+# is a GET, so view-only can never change the printer; uploads are POSTs and stay blocked.
+PUBLIC_DENY = ("/api/streams", "/api/audio.pcm", "/api/pa", "/api/settings")
+
+
+def hide_serials(body):
+    """Serial numbers are only for the master code."""
+    try:
+        j = json.loads(body)
+        for m in ((j.get("device") or {}).get("modules") or []):
+            if m.get("sn"):
+                m["sn"] = None
+                m["sn_hidden"] = True
+        return json.dumps(j).encode()
+    except Exception:
+        return body
 _rlock = threading.Lock()
 _rcache = [b"", 0.0]
 
@@ -557,6 +573,10 @@ class H(BaseHTTPRequestHandler):
         view_only = not s or (s["role"] != "master" and _state["frozen"])
         if view_only and method == "GET" and sub in READ_ONLY:
             return self.read_only(sub)
+        if view_only and method == "GET" and sub.startswith("/api/") and not sub.startswith(BLOCKED + PUBLIC_DENY):
+            return self.proxy(method, sub + ("?" + query if query else ""))
+        if s and s["role"] != "master" and method == "GET" and sub == "/api/status":
+            return self.read_only(sub)          # same as the public, minus nothing but serial numbers
         if not s:
             return self.json(401, {"ok": False, "error": "locked"})
         if method == "POST" and self.headers.get("X-PW") != "1":   # blocks cross-site form posts
@@ -612,7 +632,7 @@ class H(BaseHTTPRequestHandler):
 
     def read_only(self, sub):
         """Status is cached for a second so lots of viewers cost the printer app one request a second.
-        Viewers never get SD card file names/paths or past prints (activity log, training history)."""
+        Everyone but the master code gets it with the serial numbers taken out."""
         if sub == "/api/job/plate.png":
             return self.proxy("GET", sub)
         if sub == "/api/job":
@@ -623,19 +643,13 @@ class H(BaseHTTPRequestHandler):
                 return self.json(502, {"ok": False, "error": "PrintWatch isn't answering"})
             if not isinstance(j, dict):
                 j = {"found": False}
-            j.pop("path", None)
             return self.json(200, j)
         with _rlock:
             if time.time() - _rcache[1] > 1.0:
                 try:
                     with urllib.request.urlopen(APP + "/api/status", timeout=6) as r:
                         j = json.loads(r.read())
-                    j.pop("device", None)                 # serial numbers stay private
-                    for k in ("events", "training"):
-                        j.pop(k, None)
-                    pr = j.get("printer") or {}
-                    pr.pop("file", None)                  # SD card file path of the current job
-                    _rcache[0] = json.dumps(j).encode()
+                    _rcache[0] = hide_serials(json.dumps(j).encode())   # everything visible, serial numbers hidden
                 except Exception:
                     _rcache[0] = b""
                 _rcache[1] = time.time()

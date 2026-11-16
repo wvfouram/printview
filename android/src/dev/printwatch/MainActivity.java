@@ -59,7 +59,8 @@ public class MainActivity extends Activity {
     private LinearLayout events;
     private ImageView cam, lightBtn;
     private ProgressBar progress, score;
-    private Button pauseBtn, stopBtn;
+    private Button pauseBtn, stopBtn, nextBtn;
+    private String nextName;
     private Switch autoPause;
     private Button[] sens = new Button[3];
     private static final String[] SENS = {"low", "medium", "high"};
@@ -245,6 +246,12 @@ public class MainActivity extends Activity {
         ctl.addView(pauseBtn, pw);
         ctl.addView(stopBtn, Ui.weight(1));
         root.addView(ctl, ctlLp);
+        nextBtn = Ui.button(c, "Start next", Ui.OK, Color.parseColor("#06180f"), 0);
+        nextBtn.setVisibility(View.GONE);
+        LinearLayout.LayoutParams nxl = new LinearLayout.LayoutParams(-1, -2);
+        nxl.topMargin = Ui.dp(c, 10);
+        root.addView(nextBtn, nxl);
+        nextBtn.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { startNext(); } });
         wireMainButtons();
 
         // shortcuts
@@ -289,7 +296,7 @@ public class MainActivity extends Activity {
         stl.topMargin = Ui.dp(c, 10);
         root.addView(strTile, stl);
 
-        View schTile = tile("Scheduled prints", "What's set to start later, with countdowns", "layers");
+        View schTile = tile("Scheduled & queue", "What's set to start later, and the print queue", "layers");
         schTile.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { startActivity(new Intent(MainActivity.this, ScheduleActivity.class)); }
         });
@@ -804,6 +811,27 @@ public class MainActivity extends Activity {
         sndLabel();
     }
 
+    private void startNext() {
+        if (nextName == null) return;
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle("Start the next print?")
+                .setMessage(nextName + "\n\nMake sure the plate is clear.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start", new android.content.DialogInterface.OnClickListener() {
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        new Thread(new Runnable() { public void run() {
+                            String m;
+                            try {
+                                Api.Resp r = Api.post(MainActivity.this, "/api/queue/next", "{}");
+                                m = r.code == 200 ? "Starting " + nextName : new org.json.JSONObject(r.text()).optString("error", "Couldn't start");
+                            } catch (Exception e) { m = "Couldn't start: " + e.getMessage(); }
+                            final String fm = m;
+                            ui.post(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, fm, android.widget.Toast.LENGTH_SHORT).show(); } });
+                        } }).start();
+                    }
+                }).show();
+    }
+
     /** Which camera the phone shows: the printer's own, or a USB webcam on the Pi. */
     static boolean usbCam(Context c) { return c.getSharedPreferences("cam", Context.MODE_PRIVATE).getBoolean("usb", false); }
 
@@ -873,6 +901,15 @@ public class MainActivity extends Activity {
         JSONObject set = s.optJSONObject("settings"), tr = s.optJSONObject("training");
         if (p == null || cm == null || d == null) return;
         boolean pc = p.optBoolean("connected"), cc = cm.optBoolean("connected");
+        if (nextBtn != null) {
+            JSONObject q = s.optJSONObject("queue");
+            JSONObject nx = q == null ? null : q.optJSONObject("next");
+            String stt = p.optString("state");
+            boolean free = pc && ("IDLE".equals(stt) || "FINISH".equals(stt) || "FAILED".equals(stt));
+            nextName = nx == null ? null : nx.optString("name").replaceAll("(?i)(\\.gcode)?\\.3mf$", "");
+            nextBtn.setVisibility(nx != null && free ? View.VISIBLE : View.GONE);
+            if (nx != null) nextBtn.setText("Start next: " + nextName + (q.optInt("count") > 1 ? "  (+" + (q.optInt("count") - 1) + " more)" : ""));
+        }
         if (dots != null) {
             String where = Api.modeLabel(this).startsWith("Away") ? "Away" : "Home";
             dots.setText(pc && cc ? "●  Connected · " + where

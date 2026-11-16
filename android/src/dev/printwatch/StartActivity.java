@@ -165,6 +165,15 @@ public class StartActivity extends Base {
         sl.topMargin = Ui.dp(c, 8);
         p.addView(sch, sl);
         sch.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { pickTime(); } });
+        Button que = Ui.button(c, "Add to queue", Ui.SURFACE2, Ui.TEXT, Ui.LINE);
+        LinearLayout.LayoutParams ql = new LinearLayout.LayoutParams(-1, -2);
+        ql.topMargin = Ui.dp(c, 8);
+        p.addView(que, ql);
+        que.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+            post("/api/queue", body(), new Done<JSONObject>() {
+                public void run(JSONObject r, String e) { toast(e != null ? e : "Added to the queue. Tap \"Start next\" on the home screen when the printer is free."); }
+            });
+        } });
         note(p, "Check the build plate is clear before starting.");
     }
 

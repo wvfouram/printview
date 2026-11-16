@@ -16,7 +16,7 @@ import java.util.Date;
 
 /** Everything scheduled: waiting ones with a countdown and Cancel, plus recent started / failed ones. */
 public class ScheduleActivity extends Base {
-    private LinearLayout list;
+    private LinearLayout list, qList;
     private TextView msg;
     private final Runnable tick = new Runnable() { public void run() { load(); ui.postDelayed(this, 30000); } };
 
@@ -29,12 +29,61 @@ public class ScheduleActivity extends Base {
         list.setOrientation(LinearLayout.VERTICAL);
         p.addView(list);
         note(p, "To schedule a print, open a file in Files and tap \"Schedule for later\".");
+        p.addView(Ui.heading(this, "Print queue"));
+        qList = new LinearLayout(this);
+        qList.setOrientation(LinearLayout.VERTICAL);
+        p.addView(qList);
+        note(p, "Add files with \"Add to queue\" in Files. When a print is done, tap \"Start next\" on the home screen.");
     }
 
     @Override protected void onResume() { super.onResume(); ui.post(tick); }
     @Override protected void onPause() { super.onPause(); ui.removeCallbacks(tick); }
 
+    private void loadQueue() {
+        getJson("/api/queue", new Done<JSONObject>() {
+            public void run(JSONObject v, String e) {
+                qList.removeAllViews();
+                if (e != null) { qList.addView(Ui.text(ScheduleActivity.this, e, 13, Ui.MUTED, false)); return; }
+                JSONArray a = v.optJSONArray("items");
+                if (a == null || a.length() == 0) { qList.addView(Ui.text(ScheduleActivity.this, "The queue is empty.", 13, Ui.MUTED, false)); return; }
+                for (int i = 0; i < a.length(); i++) {
+                    final JSONObject x = a.optJSONObject(i);
+                    Context c = ScheduleActivity.this;
+                    LinearLayout r = Ui.row(c);
+                    r.setBackground(Ui.box(c, Ui.SURFACE, Ui.LINE, 14));
+                    int pd = Ui.dp(c, 12);
+                    r.setPadding(pd, pd, pd, pd);
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+                    lp.topMargin = Ui.dp(c, 8);
+                    TextView t = Ui.text(c, (i + 1) + ".  " + x.optString("name").replaceAll("(?i)(\\.gcode)?\\.3mf$", "") + "  · plate " + x.optInt("plate"), 15, Ui.TEXT, true);
+                    t.setSingleLine(true);
+                    t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    r.addView(t, Ui.weight(1));
+                    final int idx = i;
+                    if (i > 0) {
+                        Button up = Ui.button(c, "Up", Ui.SURFACE2, Ui.TEXT, 0);
+                        up.setTextSize(12);
+                        up.setOnClickListener(new View.OnClickListener() { public void onClick(View v2) {
+                            post("/api/queue/" + x.optString("id") + "/move", "{\"delta\":-1}", new Done<JSONObject>() { public void run(JSONObject r2, String e2) { loadQueue(); } });
+                        } });
+                        r.addView(up);
+                    }
+                    Button rm = Ui.button(c, "Remove", Ui.alpha(Ui.DANGER, 0.15f), Ui.DANGER, 0);
+                    rm.setTextSize(12);
+                    rm.setOnClickListener(new View.OnClickListener() { public void onClick(View v2) {
+                        post("/api/queue/" + x.optString("id") + "/remove", "{}", new Done<JSONObject>() { public void run(JSONObject r2, String e2) { loadQueue(); } });
+                    } });
+                    LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-2, -2);
+                    rl.leftMargin = Ui.dp(c, 6);
+                    r.addView(rm, rl);
+                    qList.addView(r, lp);
+                }
+            }
+        });
+    }
+
     private void load() {
+        loadQueue();
         getJson("/api/schedule", new Done<JSONObject>() {
             public void run(JSONObject v, String e) {
                 if (e != null) { msg.setText(e); return; }
