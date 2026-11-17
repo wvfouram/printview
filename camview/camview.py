@@ -539,7 +539,6 @@ class H(BaseHTTPRequestHandler):
                          "script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; "
                          "base-uri 'none'; form-action 'self'")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Robots-Tag", "noindex, nofollow, noarchive")   # search engines: don't list anything here
         self.send_header("Strict-Transport-Security", "max-age=31536000")
         super().end_headers()
 
@@ -556,6 +555,13 @@ class H(BaseHTTPRequestHandler):
         # the block lists below and still reach the same place in PrintView, so they're refused outright.
         if not SAFE_PATH.fullmatch(path) or "//" in path or "/." in path:
             return self.send(400, "bad path")
+        host = re.sub(r"[^A-Za-z0-9.:-]", "", self.headers.get("Host", ""))[:100]
+        if method == "GET" and path == "/robots.txt":     # search engines may list the page (owner's choice)
+            return self.send(200, f"User-agent: *\nAllow: {BASE}/$\nDisallow: {BASE}/api/\nDisallow: {BASE}/admin/\n"
+                                  f"Sitemap: https://{host}{BASE}/sitemap.xml\n")
+        if method == "GET" and path == BASE + "/sitemap.xml":
+            return self.send(200, f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                                  f'<url><loc>https://{host}{BASE}/</loc></url></urlset>', "application/xml")
         if path != BASE and not path.startswith(BASE + "/"):
             return self.send(404, "not found")
         sub = path[len(BASE):] or "/"
