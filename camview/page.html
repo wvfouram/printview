@@ -148,6 +148,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
 .ro #views input,.ro #views select,.ro #views .seg,.ro #views .sw,.ro #views .slot{pointer-events:none}
 .ro #views .sw{opacity:.75}
 .ro #views .btn.ro-ok{display:inline-flex!important}
+.ro #views .nav,.ro #views .nav button{pointer-events:auto!important}.ro #views .btn.nav{display:inline-flex!important}
 .ro #views .v3d-ctl input{pointer-events:auto}
 .ro #views .sched{display:none}
 .sn{filter:blur(5px);user-select:none;transition:filter .2s}.sn.show{filter:none;user-select:text}.sn.tap{cursor:pointer}
@@ -1305,9 +1306,9 @@ async function load3d(f, plate) {
 // ---------- Print from SD
 VIEWS.print = {
   build(el) {
-    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm" id="pRef">Refresh</button></div>
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm nav" id="pRef">Refresh</button></div>
       <div class="mu sm" id="pUpMsg" style="margin-top:6px"></div>
-      <div class="row" style="margin-top:10px;gap:6px"><input type="text" id="pQ" class="grow" placeholder="Search files"><select id="pSort"><option value="new">Newest</option><option value="old">Oldest</option><option value="az">Name A-Z</option><option value="big">Biggest</option></select></div>
+      <div class="row" style="margin-top:10px;gap:6px"><input type="text" id="pQ" class="grow nav" placeholder="Search files"><select id="pSort" class="nav"><option value="new">Newest</option><option value="old">Oldest</option><option value="az">Name A-Z</option><option value="big">Biggest</option></select></div>
       <div class="list" id="pList" style="margin-top:10px"><div class="skel"></div><div class="skel"></div></div>
       <div id="pSchedList" style="margin-top:12px"></div>
       <details style="margin-top:12px"><summary class="mu sm" style="cursor:pointer">Recently deleted (kept on the Pi)</summary><div class="list" id="pTrash" style="margin-top:8px"></div></details></div><div id="pDetail"></div>`;
@@ -1376,7 +1377,7 @@ VIEWS.print = {
             <img src="${BASE}/api/files/plate.png?path=${encodeURIComponent(f.path)}&plate=${plate.index}" style="width:120px;height:120px;border-radius:14px;background:var(--s2);object-fit:contain">
             <div class="grow" style="min-width:0"><div style="font-weight:650;font-size:17px;overflow-wrap:anywhere">${esc(f.title)}</div>
             <div class="mu sm">${mins(plate.seconds / 60)}${plate.weight_g ? " · " + Math.round(plate.weight_g) + " g" : ""}</div>
-            ${plates.length > 1 ? `<div class="seg" id="pPl" style="margin-top:10px">${plates.map(p => `<button data-v="${p.index}">Plate ${p.index}</button>`).join("")}</div>` : ""}</div></div>
+            ${plates.length > 1 ? `<div class="seg nav" id="pPl" style="margin-top:10px">${plates.map(p => `<button data-v="${p.index}">Plate ${p.index}</button>`).join("")}</div>` : ""}</div></div>
           <div class="div"></div><div class="row"><div class="h grow" style="margin:0">3D preview</div><span class="fa sm" id="p3dInfo"></span></div>
           <div id="p3d" style="margin-top:10px"><div class="v3d-wait">Loading the toolpath...</div></div>
           <div class="div"></div><div class="h">Filaments</div>
@@ -1549,7 +1550,7 @@ VIEWS.timelapses = {
   build(el) {
     el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Made by the Pi (per layer)</div></div>
       <div class="list" id="tPi" style="margin-top:10px"><div class="mu">Loading...</div></div></div>
-      <div class="card"><div class="row"><div class="h grow" style="margin:0">From the printer's SD card</div><button class="btn sm" id="tRef">Refresh</button></div>
+      <div class="card"><div class="row"><div class="h grow" style="margin:0">From the printer's SD card</div><button class="btn sm nav" id="tRef">Refresh</button></div>
       <div class="list" id="tList" style="margin-top:10px"><div class="mu">Loading...</div></div></div>`;
     $("#tRef").onclick = () => this.load(true);
     this.load(false);
@@ -1597,7 +1598,7 @@ VIEWS.train = {
         <div class="mu sm" style="margin:8px 0 12px">Upload pictures of failed prints (spaghetti, blobs, knocked-off parts). Your model learns from them as extra failure examples. Best results: photos from your printer's own camera angle. They add to your failed prints, they don't replace them.</div>
         <div class="row"><button class="btn sm pri" id="phUp">Upload photos</button><button class="btn sm bad" id="phDel" style="margin-left:6px">Delete all</button><span class="mu sm grow" id="phMsg" style="margin-left:10px"></span></div>
         <div id="phGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin-top:12px"></div></div>
-      <div class="card"><div class="seg" id="trF"><button data-v="review">To review</button><button data-v="all">All</button><button data-v="failed">Failed</button><button data-v="good">Good</button></div>
+      <div class="card"><div class="seg nav" id="trF"><button data-v="review">To review</button><button data-v="all">All</button><button data-v="failed">Failed</button><button data-v="good">Good</button></div>
       <div class="list" id="trList" style="margin-top:10px"></div></div><div id="trRev"></div>`;
     $("#trNow").onclick = async () => { try { await api("/api/train", {}); toast("Training..."); this.loadModel(); } catch (e) { toast(e.message); } };
     $("#trUse").onchange = e => setting({use_custom: e.target.checked}, e.target.checked ? "Your model is on" : "Using Obico stock");
@@ -1681,7 +1682,7 @@ VIEWS.flow = {
   seq: 0, lines: {p1s: [], uno: [], web: []}, paused: false, timer: null, hide: {}, filter: "",
   build(el) {
     el.innerHTML = `<details class="card" id="flDet"><summary style="cursor:pointer;font-weight:650">Advanced: raw data from the printer, Arduino and web</summary><div style="margin-top:12px"><div class="h">Data flow</div><div class="row"><div class="grow mu sm">Live traffic through the Pi, newest at the bottom. <span style="color:var(--ok)">Green</span> = into the Pi, <span style="color:var(--ac)">amber</span> = out of the Pi.</div></div>
-      <div class="row" style="margin-top:10px;gap:6px"><input id="flF" placeholder="Filter (e.g. gcode_state, ams, temp)" class="grow"><button class="btn sm" id="flP">Pause</button><button class="btn sm" id="flC">Clear</button></div></div>
+      <div class="row" style="margin-top:10px;gap:6px"><input id="flF" class="grow nav" placeholder="Filter (e.g. gcode_state, ams, temp)"><button class="btn sm nav" id="flP">Pause</button><button class="btn sm nav" id="flC">Clear</button></div></div>
       ${FLOW.map(([k, t]) => `<div class="card"><div class="row" style="cursor:pointer" data-fh="${k}"><div class="h grow" style="margin:0">${t}</div><span class="chip" id="flN-${k}">0</span></div>
         <pre id="flB-${k}" class="flow"></pre></div>`).join("")}</div></details>`;
     $("#flP").onclick = () => { this.paused = !this.paused; $("#flP").textContent = this.paused ? "Resume" : "Pause"; if (!this.paused) this.paint(); };
@@ -1747,7 +1748,7 @@ VIEWS.queue = {
 VIEWS.statsv = {
   days: 0,
   build(el) {
-    el.innerHTML = `<div class="card"><div class="seg" id="stDays"><button data-v="30">30 days</button><button data-v="365">This year</button><button data-v="0">All time</button></div>
+    el.innerHTML = `<div class="card"><div class="seg nav" id="stDays"><button data-v="30">30 days</button><button data-v="365">This year</button><button data-v="0">All time</button></div>
       <div id="stBody" style="margin-top:14px"><div class="mu">Loading...</div></div></div>`;
     paintSeg("#stDays", this.days);
     el.querySelectorAll("#stDays button").forEach(b => b.onclick = () => { this.days = +b.dataset.v; paintSeg("#stDays", this.days); this.load(); });
@@ -1960,7 +1961,7 @@ function subtabs(key, parts) {
   return {
     build(el) {
       const cur = subSel[key] || parts[0][0];
-      el.innerHTML = `<div class="seg" style="margin-bottom:2px">${parts.map(([n]) => `<button data-v="${n}" class="${n === cur ? "on" : ""}">${n}</button>`).join("")}</div><div></div>`;
+      el.innerHTML = `<div class="seg nav" style="margin-bottom:2px">${parts.map(([n]) => `<button data-v="${n}" class="${n === cur ? "on" : ""}">${n}</button>`).join("")}</div><div></div>`;
       const box = el.lastElementChild;
       this.child = (parts.find(p => p[0] === cur) || parts[0])[1];
       this.child.build(box);
