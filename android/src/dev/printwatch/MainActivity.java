@@ -155,7 +155,8 @@ public class MainActivity extends Activity {
         LinearLayout head = Ui.row(c);
         LinearLayout titleCol = new LinearLayout(c);
         titleCol.setOrientation(LinearLayout.VERTICAL);
-        TextView title = Ui.text(c, "PrintWatch", 26, Ui.TEXT, true);
+        TextView title = Ui.text(c, "PrintView", 26, Ui.TEXT, true);
+        titleView = title;
         title.setLetterSpacing(-0.01f);
         titleCol.addView(title);
         dots = Ui.text(c, "Connecting...", 12.5f, Ui.MUTED, false);
@@ -313,6 +314,30 @@ public class MainActivity extends Activity {
         root.addView(hisTile, hil);
 
 
+        View staTile = tile("Stats", "Success rate, hours, filament, cost, estimates", "layers");
+        staTile.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { startActivity(new Intent(MainActivity.this, StatsActivity.class)); }
+        });
+        LinearLayout.LayoutParams stl3 = new LinearLayout.LayoutParams(-1, -2);
+        stl3.topMargin = Ui.dp(c, 10);
+        root.addView(staTile, stl3);
+
+        View spoTile = tile("Spools and prices", "Grams left on each spool, price per kg", "layers");
+        spoTile.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { startActivity(new Intent(MainActivity.this, SpoolsActivity.class)); }
+        });
+        LinearLayout.LayoutParams spl3 = new LinearLayout.LayoutParams(-1, -2);
+        spl3.topMargin = Ui.dp(c, 10);
+        root.addView(spoTile, spl3);
+
+        View setTile = tile("Settings", "Printer name, quiet hours, after a print, Pi fan", "gear");
+        setTile.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { startActivity(new Intent(MainActivity.this, SettingsActivity.class)); }
+        });
+        LinearLayout.LayoutParams sel3 = new LinearLayout.LayoutParams(-1, -2);
+        sel3.topMargin = Ui.dp(c, 10);
+        root.addView(setTile, sel3);
+
         View vfxTile = tile("Video settings", "Colors, greyscale, invert, flip, zoom", "layers");
         vfxTile.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { startActivity(new Intent(MainActivity.this, VideoFxActivity.class)); }
@@ -464,31 +489,6 @@ public class MainActivity extends Activity {
         });
         int sz = Ui.dp(c, 42);
         if (!big) {
-            final Button camSw = Ui.button(c, usbCam(c) ? "USB CAM" : "PRINTER CAM", Color.parseColor("#99000000"), Ui.TEXT, 0);
-            camSw.setTextSize(11);
-            camSw.setMinHeight(sz);
-            camSw.setMinimumHeight(sz);
-            camSw.setPadding(Ui.dp(c, 12), 0, Ui.dp(c, 12), 0);
-            camSw.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    boolean u = !usbCam(MainActivity.this);
-                    getSharedPreferences("cam", MODE_PRIVATE).edit().putBoolean("usb", u).apply();
-                    camSw.setText(u ? "USB CAM" : "PRINTER CAM");
-                    etag = null;
-                }
-            });
-            LinearLayout.LayoutParams cl2 = new LinearLayout.LayoutParams(-2, sz);
-            cl2.rightMargin = Ui.dp(c, 8);
-            btns.addView(camSw, cl2);
-            sndBtn = Ui.button(c, sndOn ? "SOUND ON" : "SOUND", Color.parseColor("#99000000"), sndOn ? Ui.ACCENT : Ui.TEXT, 0);
-            sndBtn.setTextSize(11);
-            sndBtn.setMinHeight(sz);
-            sndBtn.setMinimumHeight(sz);
-            sndBtn.setPadding(Ui.dp(c, 12), 0, Ui.dp(c, 12), 0);
-            sndBtn.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { if (sndOn) soundOff(); else soundOn(); } });
-            LinearLayout.LayoutParams sl2 = new LinearLayout.LayoutParams(-2, sz);
-            sl2.rightMargin = Ui.dp(c, 8);
-            btns.addView(sndBtn, sl2);
             btns.addView(lightBtn, new LinearLayout.LayoutParams(sz, sz));
             ImageView rot = Ui.iconButton(c, "expand", Ui.TEXT, Color.parseColor("#99000000"));
             rot.setContentDescription("Watch full screen");
@@ -815,25 +815,49 @@ public class MainActivity extends Activity {
         if (nextName == null) return;
         new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
                 .setTitle("Start the next print?")
-                .setMessage(nextName + "\n\nMake sure the plate is clear.")
+                .setMessage(nextName + "\n\nThe Pi checks the plate and the spools first.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Start", new android.content.DialogInterface.OnClickListener() {
-                    public void onClick(android.content.DialogInterface d, int w) {
-                        new Thread(new Runnable() { public void run() {
-                            String m;
-                            try {
-                                Api.Resp r = Api.post(MainActivity.this, "/api/queue/next", "{}");
-                                m = r.code == 200 ? "Starting " + nextName : new org.json.JSONObject(r.text()).optString("error", "Couldn't start");
-                            } catch (Exception e) { m = "Couldn't start: " + e.getMessage(); }
-                            final String fm = m;
-                            ui.post(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, fm, android.widget.Toast.LENGTH_SHORT).show(); } });
-                        } }).start();
-                    }
+                    public void onClick(android.content.DialogInterface d, int w) { sendNext(false); }
                 }).show();
     }
 
+    /** Asks the Pi to start the next print. If the plate or a spool looks wrong it asks once more. */
+    private void sendNext(final boolean force) {
+        new Thread(new Runnable() { public void run() {
+            String m = null;
+            org.json.JSONObject pf = null;
+            try {
+                Api.Resp r = Api.post(MainActivity.this, "/api/queue/next", force ? "{\"force\":true}" : "{}");
+                org.json.JSONObject j = new org.json.JSONObject(r.text());
+                if (r.code == 200) m = "Starting " + nextName;
+                else if (j.optJSONObject("preflight") != null) pf = j.optJSONObject("preflight");
+                else m = j.optString("error", "Couldn't start");
+            } catch (Exception e) { m = "Couldn't start: " + e.getMessage(); }
+            final String fm = m;
+            final org.json.JSONObject fpf = pf;
+            ui.post(new Runnable() { public void run() {
+                if (isFinishing()) return;
+                if (fpf == null) { android.widget.Toast.makeText(MainActivity.this, fm, android.widget.Toast.LENGTH_SHORT).show(); return; }
+                StringBuilder sb = new StringBuilder();
+                org.json.JSONArray rs = fpf.optJSONArray("reasons");
+                for (int i = 0; rs != null && i < rs.length(); i++) {
+                    String x = rs.optString(i);
+                    sb.append("- ").append(x.isEmpty() ? x : Character.toUpperCase(x.charAt(0)) + x.substring(1)).append('\n');
+                }
+                if (fpf.optBoolean("photo")) sb.append("\nThe photo is in Controls > Clear-plate check.");
+                new android.app.AlertDialog.Builder(MainActivity.this, android.R.style.Theme_Material_Dialog_Alert)
+                        .setTitle("Check before starting").setMessage(sb.toString().trim())
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Start anyway", new android.content.DialogInterface.OnClickListener() {
+                            public void onClick(android.content.DialogInterface d, int w) { sendNext(true); }
+                        }).show();
+            } });
+        } }).start();
+    }
+
     /** Which camera the phone shows: the printer's own, or a USB webcam on the Pi. */
-    static boolean usbCam(Context c) { return c.getSharedPreferences("cam", Context.MODE_PRIVATE).getBoolean("usb", false); }
+    static boolean usbCam(Context c) { return false; }   // the USB camera is no longer shown in the app
 
     private void pollCamera() {
         if (!running) return;
@@ -895,8 +919,14 @@ public class MainActivity extends Activity {
         v.setAlpha(on ? 1f : 0.35f);
     }
 
+    private TextView titleView;
+
     private void render(JSONObject s) {
         status = s;
+        if (titleView != null) {
+            String nm = s.optString("name", "").trim();
+            titleView.setText(nm.isEmpty() ? "PrintView" : nm);
+        }
         JSONObject p = s.optJSONObject("printer"), cm = s.optJSONObject("camera"), d = s.optJSONObject("detector");
         JSONObject set = s.optJSONObject("settings"), tr = s.optJSONObject("training");
         if (p == null || cm == null || d == null) return;

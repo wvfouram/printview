@@ -170,9 +170,16 @@ public class StartActivity extends Base {
         ql.topMargin = Ui.dp(c, 8);
         p.addView(que, ql);
         que.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
-            post("/api/queue", body(), new Done<JSONObject>() {
-                public void run(JSONObject r, String e) { toast(e != null ? e : "Added to the queue. Tap \"Start next\" on the home screen when the printer is free."); }
-            });
+            final String b = body();
+            post("/api/spools/check", b, new Done<JSONObject>() { public void run(JSONObject chk, String ce) {
+                final Runnable add = new Runnable() { public void run() {
+                    post("/api/queue", b, new Done<JSONObject>() {
+                        public void run(JSONObject r, String e) { toast(e != null ? e : "Added to the queue. Tap \"Start next\" on the home screen when the printer is free."); }
+                    });
+                } };
+                String t = preCheckText(chk);
+                if (t.contains("WARNING")) confirm("Add to the queue?", getIntent().getStringExtra("title") + t, "Add anyway", add); else add.run();
+            } });
         } });
         note(p, "Check the build plate is clear before starting.");
     }
@@ -411,8 +418,10 @@ public class StartActivity extends Base {
                 + ",\"use_ams\":" + ams + ",\"ams_mapping\":" + (ams ? am.toString() : "[]")
                 + ",\"timelapse\":" + timelapse.isChecked() + ",\"bed_leveling\":" + level.isChecked()
                 + ",\"flow_cali\":" + flow.isChecked() + ",\"vibration_cali\":" + vib.isChecked() + ",\"speed\":" + speed + "}";
-        confirm("Start this print?", getIntent().getStringExtra("title") + "  ·  plate " + plate.optInt("index")
-                        + (ams ? "" : "\nFrom the external spool."), "Start",
+        final String head = getIntent().getStringExtra("title") + "  ·  plate " + plate.optInt("index")
+                + (ams ? "" : "\nFrom the external spool.");
+        post("/api/spools/check", json, new Done<JSONObject>() { public void run(JSONObject chk, String ce) {
+        confirm("Start this print?", head + preCheckText(chk), "Start",
                 new Runnable() {
                     public void run() {
                         post("/api/print", json, new Done<JSONObject>() {
@@ -423,5 +432,21 @@ public class StartActivity extends Base {
                         });
                     }
                 });
+        } });
+    }
+
+    /** "Uses about 80 g, costs about $1.60" plus a warning for any spool that won't last. */
+    static String preCheckText(JSONObject j) {
+        if (j == null) return "";
+        StringBuilder sb = new StringBuilder();
+        double g = j.optDouble("grams", 0);
+        if (g > 0) {
+            sb.append("\nUses about ").append(Math.round(g)).append(" g");
+            if (!j.isNull("cost") && j.has("cost")) sb.append(", costs about ").append(j.optString("currency", "$")).append(String.format(java.util.Locale.US, "%.2f", j.optDouble("cost")));
+            sb.append('.');
+        }
+        org.json.JSONArray w = j.optJSONArray("warnings");
+        for (int i = 0; w != null && i < w.length(); i++) sb.append(i == 0 ? "\n" : "").append("\nWARNING: ").append(w.optString(i));
+        return sb.toString();
     }
 }

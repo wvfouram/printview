@@ -247,6 +247,17 @@ class DetectionLoop:
     def start(self):
         threading.Thread(target=self._run, name="detector", daemon=True).start()
 
+    def in_grace(self):
+        """True while the print is still on its first layers (setting first_layer_grace, 0 = off)."""
+        try:
+            n = int(self.settings.get("first_layer_grace") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        if n <= 0 or not self.printer:
+            return False
+        layer = self.printer.status().get("layer")
+        return layer is not None and layer <= n
+
     def custom_active(self):
         return bool(self.trainer and self.trainer.model and self.settings.get("use_custom")
                     and self.model and self.model.feature_dim == self.trainer.model.dim)
@@ -269,6 +280,8 @@ class DetectionLoop:
             "current_p": round(self.pred.current_p, 3),
             "frames_this_print": self.pred.current_frame_num,
             "warmup_s": (max(0, 6 - self.pred.current_frame_num) if active else warmup_left) * INTERVAL_S,
+            "grace": self.printer is not None and self.printer.state == "RUNNING" and self.in_grace(),
+            "grace_layers": self.settings.get("first_layer_grace"),
             "warned": self.warned,
             "acted": self.acted,
             "infer_ms": self.last_infer_ms,
@@ -323,6 +336,11 @@ class DetectionLoop:
         t0 = time.time()
         dets, feats = self.model.detect(img)
         self.last_infer_ms = int((time.time() - t0) * 1000)
+        if self.in_grace():
+            # first layers: the bed, purge line and first lines fool the model, so only record, never judge
+            if feats is not None and self.dataset:
+                self.dataset.add_tick(img, feats, sum(c for c, _ in dets), None)
+            return
         self.pred.update(dets)
         self.last_run = time.time()
         if self.pred.lifetime_frame_num % 30 == 0:

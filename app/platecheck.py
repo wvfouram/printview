@@ -138,13 +138,16 @@ class PlateCheck:
             with open(self._p("end.jpg"), "wb") as f:
                 f.write(jp)
 
-    def _check(self, job):
-        time.sleep(1.5)
-        jp = self._frame()
-        if not jp:
-            return
-        with open(self._p("start.jpg"), "wb") as f:
-            f.write(jp)
+    def _light_on(self):
+        """The camera can't see a dark bed: turn the chamber light on first if it's off."""
+        try:
+            if self.printer.status().get("light") is False:
+                self.printer.light(True)
+                time.sleep(4)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _evaluate(self, jp):
         cur = _small(jp)
         reasons, scores = [], {}
         # 1. same as when the last print ended?
@@ -169,6 +172,39 @@ class PlateCheck:
             if d_px > CLEAN_T and (not fd or min(fd) > FEAT_T):
                 reasons.append("the bed doesn't look like your clear plates")
         scores["clean_examples"] = len(refs)
+        return reasons, scores, len(refs)
+
+    def check_now(self, job=""):
+        """Look at the plate right now (before "Start next"). Returns the result; no notification.
+        The start-of-print check is skipped for the next few minutes so it doesn't ask twice."""
+        self._light_on()
+        jp = self._frame(max_age=6)
+        if not jp:
+            return {"ok": True, "reasons": [], "skipped": "no camera picture"}
+        with open(self._p("start.jpg"), "wb") as f:
+            f.write(jp)
+        reasons, scores, n = self._evaluate(jp)
+        ok = not reasons
+        self.result = {"t": int(time.time()), "job": job, "ok": ok, "reasons": reasons, "scores": scores,
+                       "learning": n < 2, "answered": None, "before_start": True}
+        self._save("last.json", self.result)
+        self._skip_until = time.time() + 300
+        self._pending_ok = jp if ok else None
+        return self.result
+
+    def _check(self, job):
+        time.sleep(1.5)
+        if time.time() < getattr(self, "_skip_until", 0):
+            self._skip_until = 0
+            return
+        self._light_on()
+        jp = self._frame()
+        if not jp:
+            return
+        with open(self._p("start.jpg"), "wb") as f:
+            f.write(jp)
+        reasons, scores, n_refs = self._evaluate(jp)
+        refs = range(n_refs)
         ok = not reasons
         self.result = {"t": int(time.time()), "job": job, "ok": ok, "reasons": reasons, "scores": scores,
                        "learning": len(refs) < 2, "answered": None}

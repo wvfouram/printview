@@ -382,6 +382,8 @@ class Admin(Gtk.Window):
 
     def render(self, s):
         self.status = s
+        nm = (s.get("name") or "").strip()
+        self.get_titlebar().set_title((nm + " Admin") if nm else "PrintView Admin")
         p = s.get("printer") or {}
         ok = p.get("connected")
         self.conn.set_text("● Connected" if ok else "● Printer offline")

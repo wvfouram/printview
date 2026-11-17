@@ -78,6 +78,10 @@ header h1:before{content:"";width:10px;height:10px;border-radius:3px;background:
 input[type=number],input[type=text],input[type=password],input[type=datetime-local],input[type=time],input[type=date],select,textarea{background:var(--s2);border:1px solid var(--line2);border-radius:var(--r2);padding:10px 12px;outline:none;min-width:0;transition:border-color .15s,box-shadow .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--ac);box-shadow:0 0 0 3px #ffb22426}
 input[type=range]{width:100%;accent-color:var(--ac)}
+.stars{display:flex;gap:2px}.stars button{background:none;border:0;color:var(--s3);font-size:20px;line-height:1;padding:2px;cursor:pointer}.stars button.on{color:var(--ac)}.stars button:disabled{cursor:default}
+.hnote{font-family:inherit;font-size:13px}
+.kv2{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}.kv2>div{background:var(--s2);border-radius:12px;padding:10px 12px}.kv2 b{display:block;font-size:20px;margin-top:2px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}.tbl td,.tbl th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}.tbl th{color:var(--mu);font-weight:600}.tbl td.n,.tbl th.n{text-align:right}
 textarea{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:80px;resize:vertical}
 .ev{display:flex;gap:12px;padding-top:10px;align-items:flex-start}.ev i{width:7px;height:7px;border-radius:9px;margin-top:7px;flex:none;background:var(--fa)}
 .slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -147,7 +151,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
 <body>
 <div class="wrap">
   <header>
-    <h1>PrintView</h1>
+    <h1 id="pvName">PrintView</h1>
     <span id="conn"></span>
     <button class="btn sm hide" id="lockBtn" title="Lock this browser">Lock</button>
   </header>
@@ -182,6 +186,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
           <div class="stat"><span class="mu sm">Bed</span><b class="num" id="wBed">--</b></div></div>
         <div class="row ro-hide" style="margin-top:14px"><button class="btn pri grow" id="wPause" style="flex:2"></button><button class="btn bad grow" id="wStop"></button></div>
         <div class="row ro-hide hide" id="wNextRow" style="margin-top:10px"><button class="btn go grow" id="wNext"></button></div>
+        <div class="mu sm hide" id="wPub" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)"></div>
       </div>
       <div class="lock card hide" id="lockCard">
         <div class="h" style="margin-bottom:6px" id="lockTitle">Controls locked</div>
@@ -510,7 +515,7 @@ async function api(path, body) {
   if (r.status === 423) { setFrozen(true); throw new Error("Controls are frozen by the owner"); }
   const txt = await r.text();
   let j; try { j = JSON.parse(txt); } catch (e) { j = {error: txt || ("HTTP " + r.status)}; }
-  if (!r.ok || (j && j.ok === false)) throw new Error((j && j.error) || ("HTTP " + r.status));
+  if (!r.ok || (j && j.ok === false)) { const er = new Error((j && j.error) || ("HTTP " + r.status)); er.data = j; throw er; }
   return j;
 }
 async function cmd(action, extra, okMsg) {
@@ -736,7 +741,7 @@ function compose(...parts) {
   };
 }
 const printing = () => status && active(status.printer.state);
-const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["videos", "Videos"], ["printer", "Printer"]];
+const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["videos", "Videos"], ["stats", "Stats"], ["printer", "Printer"]];
 const RO_TABS = TABS;      // the public sees every tab (read-only); only Owner needs the master code
 function tabList() {
   if (window.PV_ADMIN) return TABS.concat([["admin", "Owner"], ["piadmin", "Pi admin"]]);
@@ -785,14 +790,38 @@ const NOW = {
     $("#wNextRow").classList.toggle("hide", !(q.next && free && !readOnly));
     if (q.next) {
       $("#wNext").innerHTML = IC.play + "Start next: " + esc(q.next.name.replace(/(\.gcode)?\.3mf$/i, "")) + (q.count > 1 ? ` <span style="opacity:.7">(+${q.count - 1} more)</span>` : "");
-      $("#wNext").onclick = () => confirmBox("Start the next print?", q.next.name + "\nMake sure the plate is clear.", "Start", async () => {
-        try { await api("/api/queue/next", {}); toast("Starting " + q.next.name); if (VIEWS.queue.load && $("#qList")) VIEWS.queue.load(); } catch (e) { toast(e.message); }
-      });
+      $("#wNext").onclick = () => startNext(q.next.name);
     }
     const w = watchState(s);
     $("#wWatch").textContent = "Spaghetti: " + w.text; $("#wWatch").style.color = w.color;
+    const nm = s.name || "PrintView";
+    if ($("#pvName").textContent !== nm) { $("#pvName").textContent = nm; document.title = nm; }
+    if (!this.pubT || Date.now() - this.pubT > 300000) { this.pubT = Date.now(); pubStats(); }
   }
 };
+async function pubStats() {
+  try {
+    const j = await api("/api/stats/public");
+    const el = $("#wPub");
+    if (!j.enabled || !j.all.prints) { el.classList.add("hide"); return; }
+    const m = j.month, a = j.all, kg = g => g >= 1000 ? (g / 1000).toFixed(1) + " kg" : Math.round(g) + " g";
+    el.innerHTML = `<b style="color:var(--tx)">This month</b> ${m.prints} prints · ${m.hours} h · ${m.success_pct == null ? "-" : m.success_pct + "%"} success · ${kg(m.grams)}<br>`
+      + `<b style="color:var(--tx)">All time</b> ${a.prints} prints · ${a.hours} h · ${a.success_pct == null ? "-" : a.success_pct + "%"} success · ${kg(a.grams)}`;
+    el.classList.remove("hide");
+  } catch (e) {}
+}
+// "Start next": the Pi looks at the plate and the spools first; if something's off it asks before starting
+function startNext(name) {
+  const go = async force => {
+    try { await api("/api/queue/next", force ? {force: true} : {}); toast("Starting " + name.replace(/(\.gcode)?\.3mf$/i, "")); if ($("#qList")) VIEWS.queue.load(); }
+    catch (e) {
+      const pf = e.data && e.data.preflight;
+      if (!pf) return toast(e.message);
+      confirmBox("Check before starting", pf.reasons.map(r => "- " + r[0].toUpperCase() + r.slice(1)).join("\n") + (pf.photo ? "\n\nThe photo is in Safety > Clear-plate check." : ""), "Start anyway", () => go(true), true);
+    }
+  };
+  confirmBox("Start the next print?", name.replace(/(\.gcode)?\.3mf$/i, "") + "\nThe Pi checks the plate and spools first.", "Start", () => go(false));
+}
 NOW.init();
 function watchState(s) {
   const p = s.printer, d = s.detector || {}, custom = d.mode === "custom";
@@ -803,6 +832,7 @@ function watchState(s) {
   if (!d.enabled) { text = "off"; color = ""; }
   else if (p.state !== "RUNNING") { text = p.state === "PAUSE" ? "paused" : "idle"; color = ""; }
   else if (d.acted) { text = "failure flagged"; color = "var(--bad)"; }
+  else if (d.grace) { text = "first layers"; color = ""; }
   else if (d.warmup_s > 0) { text = "warming up"; color = ""; }
   return {text, color, pct: Math.min(100, sc / max * 100), risk, custom, ms: d.infer_ms};
 }
@@ -821,9 +851,14 @@ VIEWS.watch = {
       <div class="div"></div>
       <div style="font-weight:600;margin-bottom:10px">Sensitivity</div>
       <div class="seg" id="wSens"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
+      <div class="div"></div>
+      <div class="row"><div class="grow"><div style="font-weight:600">Ignore the first layers</div><div class="mu sm">The bed and first lines can look like spaghetti. Layers watched but never judged.</div></div>
+        <select id="wGrace">${[0, 1, 2, 3, 4, 5, 8, 10].map(n => `<option value="${n}">${n === 0 ? "Off" : n + " layer" + (n > 1 ? "s" : "")}</option>`).join("")}</select></div>
       <div class="mu sm ro-hide" id="wModel" style="margin-top:12px;white-space:pre-line"></div>
     </div>`;
     $("#wAuto").onchange = e => setting({auto_pause: e.target.checked}, e.target.checked ? "Auto-pause on" : "Auto-pause off");
+    $("#wGrace").onchange = e => setting({first_layer_grace: +e.target.value}, "Saved");
+    $("#wGrace").disabled = readOnly;
     el.querySelectorAll("#wSens button").forEach(b => b.onclick = () => { paintSeg("#wSens", b.dataset.v); setting({sensitivity: b.dataset.v}); });
   },
   update(s) {
@@ -831,7 +866,8 @@ VIEWS.watch = {
     $("#wScore").style.width = w.pct + "%"; $("#wScore").style.background = w.risk;
     $("#sWatch").textContent = w.text[0].toUpperCase() + w.text.slice(1) + (w.text === "watching" && w.ms != null ? " · " + w.ms + " ms" : "");
     $("#sWatch").style.color = w.color;
-    if (s.settings) { if (document.activeElement !== $("#wAuto")) $("#wAuto").checked = !!s.settings.auto_pause; paintSeg("#wSens", s.settings.sensitivity || "medium"); }
+    if (s.settings) { if (document.activeElement !== $("#wAuto")) $("#wAuto").checked = !!s.settings.auto_pause; paintSeg("#wSens", s.settings.sensitivity || "medium");
+      if (document.activeElement !== $("#wGrace")) $("#wGrace").value = String(s.settings.first_layer_grace ?? 2); }
     const tr = s.training;
     if (tr) $("#wModel").textContent = (w.custom ? "Your model is in charge" + (tr.summary ? " · " + tr.summary : "") : tr.trained ? "Obico stock (your model is off)" : "Obico stock · label prints below to make yours")
       + (tr.review > 0 ? "\n" + tr.review + " print" + (tr.review === 1 ? "" : "s") + " to review" : "");
@@ -1306,7 +1342,9 @@ VIEWS.print = {
           });
         });
         $("#pQueue").onclick = async () => {
-          try { await api("/api/queue", mkBody()); toast("Added to the queue"); VIEWS.queue.load(); } catch (e) { toast(e.message); }
+          const b = mkBody(), extra = await preCheck(b);
+          const add = async () => { try { await api("/api/queue", b); toast("Added to the queue"); VIEWS.queue.load(); } catch (e) { toast(e.message); } };
+          if (extra.includes("WARNING")) confirmBox("Add to the queue?", f.title + extra, "Add anyway", add); else add();
         };
         $("#pStart").onclick = () => {
           const map = fil.map(fl => [fl.id, +box.querySelector(`[data-fid="${fl.id}"]`).value]);
@@ -1315,15 +1353,25 @@ VIEWS.print = {
           map.forEach(([id, slot]) => arr[id - 1] = slot);
           const body = {path: f.path, plate: plate.index, use_ams: !useExt, ams_mapping: useExt ? [] : arr, timelapse: $("#oTl").checked,
             bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked, speed: +$("#oSpd").value};
-          confirmBox("Start this print?", f.title + " · plate " + plate.index + (useExt ? "\nFrom the external spool." : ""), "Start", async () => {
+          preCheck(body).then(extra => confirmBox("Start this print?", f.title + " · plate " + plate.index + (useExt ? "\nFrom the external spool." : "") + extra, "Start", async () => {
             try { await api("/api/print", body); toast("Print started"); renderTabs(); } catch (e) { toast(e.message); }
-          });
+          }));
         };
       };
       draw();
     } catch (e) { box.innerHTML = `<div class="card" style="color:var(--bad)">${esc(e.message)}</div>`; }
   }
 };
+// filament cost and "is there enough on the spool?" for the start / queue confirmation
+async function preCheck(body) {
+  try {
+    const j = await api("/api/spools/check", body);
+    let t = "";
+    if (j.grams) t += "\nUses about " + Math.round(j.grams) + " g" + (j.cost != null ? ", costs about " + j.currency + j.cost.toFixed(2) : "") + ".";
+    if (j.warnings && j.warnings.length) t += "\n\nWARNING: " + j.warnings.join("\nWARNING: ");
+    return t;
+  } catch (e) { return ""; }
+}
 function colorDist(a, b) {
   const h = c => { c = (c || "").replace("#", ""); return c.length >= 6 ? [0, 2, 4].map(i => parseInt(c.substr(i, 2), 16)) : null; };
   const x = h(a), y = h(b); if (!x || !y) return 500;
@@ -1381,14 +1429,26 @@ VIEWS.history = {
     this.load();
   },
   async load() {
+    this.cur = (status && status.settings && status.settings.currency) || "$";
     try { const r = await api("/api/report"); $("#hRep").innerHTML = r.lines.map(esc).join("<br>"); } catch (e) { $("#hRep").textContent = e.message; }
     try {
       const it = (await api("/api/history")).items || [];
       $("#hList").innerHTML = it.length ? it.map(x => `<div class="row" style="gap:12px;margin:10px 0;align-items:flex-start">
         ${x.photo ? `<img src="${BASE}/api/history/photo/${x.photo}" loading="lazy" style="width:120px;border-radius:10px">` : '<div style="width:120px;height:68px;border-radius:10px;background:var(--s2)"></div>'}
         <div class="grow"><b>${esc(x.job)}</b><div class="fa sm">${new Date(x.end * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})} · ${mins(x.minutes)}${x.layers ? " · " + x.layers + " layers" : ""}</div>
-        <div class="sm" style="color:${x.result === "done" ? "var(--ok)" : "var(--bad)"}">${x.result === "done" ? "Finished" : "Failed / stopped"}</div>
+        <div class="sm" style="color:${x.result === "done" ? "var(--ok)" : "var(--bad)"}">${x.result === "done" ? "Finished" : "Failed at " + (x.percent ?? "?") + "%" + (x.cause ? ": " + esc(x.cause) : "")}</div>
+        ${x.grams ? `<div class="fa sm">${Math.round(x.grams)} g · ${x.meters} m${x.cost != null ? " · " + esc(this.cur) + x.cost.toFixed(2) : ""}${(x.filaments || []).length > 1 ? " (" + x.filaments.map(f => esc(f.type) + " " + Math.round(f.g) + " g").join(", ") + ")" : ""}</div>` : ""}
+        ${x.est_minutes && x.result === "done" ? `<div class="fa sm">Estimated ${mins(x.est_minutes)}, took ${mins(x.print_minutes ?? x.minutes)}${x.paused_minutes ? " (+" + mins(x.paused_minutes) + " paused)" : ""}</div>` : ""}
+        <div class="stars" data-h="${x.id}" style="margin-top:4px">${[1, 2, 3, 4, 5].map(n => `<button class="star${(x.stars || 0) >= n ? " on" : ""}" data-n="${n}" ${readOnly ? "disabled" : ""}>&#9733;</button>`).join("")}</div>
+        ${readOnly ? (x.note ? `<div class="sm" style="margin-top:4px;white-space:pre-line">${esc(x.note)}</div>` : "") : `<textarea class="hnote" data-h="${x.id}" rows="1" placeholder="Add a note (like: warped corner, use a brim)" style="margin-top:6px;min-height:0">${esc(x.note || "")}</textarea>`}
         ${x.timelapse ? `<a class="btn sm ro-ok" style="margin-top:6px" href="${BASE}/api/timelapse/${x.timelapse}/timelapse.mp4" target="_blank">Timelapse</a>` : ""}</div></div>`).join("") : '<div class="mu">Prints show up here when they finish.</div>';
+      $("#hList").querySelectorAll(".stars button").forEach(b => b.onclick = async () => {
+        const hid = b.parentNode.dataset.h, n = +b.dataset.n;
+        try { await api("/api/history/" + hid + "/note", {stars: n}); b.parentNode.querySelectorAll("button").forEach(x => x.classList.toggle("on", +x.dataset.n <= n)); } catch (e) { toast(e.message); }
+      });
+      $("#hList").querySelectorAll(".hnote").forEach(t => t.onchange = async () => {
+        try { await api("/api/history/" + t.dataset.h + "/note", {note: t.value}); toast("Note saved"); } catch (e) { toast(e.message); }
+      });
     } catch (e) { $("#hList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
   }
 };
@@ -1592,11 +1652,9 @@ VIEWS.flow = {
 VIEWS.queue = {
   build(el) {
     el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Print queue</div><button class="btn sm go ro-hide" id="qNext">Start next</button></div>
-      <div class="mu sm" style="margin-top:6px">Open a file below and tap "Add to queue". Nothing starts by itself: when a print is done, tap Start next.</div>
+      <div class="mu sm" style="margin-top:6px">Open a file below and tap "Add to queue". Nothing starts by itself: when a print is done, tap Start next. The Pi checks the plate is clear and the spools have enough filament first.</div>
       <div class="list" id="qList" style="margin-top:8px"><div class="mu sm">Loading...</div></div></div>`;
-    $("#qNext").onclick = () => confirmBox("Start the next print?", "Make sure the plate is clear.", "Start", async () => {
-      try { const j = await api("/api/queue/next", {}); toast("Starting " + j.item.name); this.load(); } catch (e) { toast(e.message); }
-    });
+    $("#qNext").onclick = () => { const q = (status && status.queue) || {}; if (q.next) startNext(q.next.name); };
     this.load();
   },
   async load() {
@@ -1615,6 +1673,152 @@ VIEWS.queue = {
     } catch (e) { $("#qList").innerHTML = `<div style="color:var(--bad)" class="sm">${esc(e.message)}</div>`; }
   },
   update(s) { const c = (s.queue || {}).count; if (c !== this.c) { this.c = c; this.load(); } }
+};
+
+// ---------- Stats
+VIEWS.statsv = {
+  days: 0,
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="seg" id="stDays"><button data-v="30">30 days</button><button data-v="365">This year</button><button data-v="0">All time</button></div>
+      <div id="stBody" style="margin-top:14px"><div class="mu">Loading...</div></div></div>`;
+    paintSeg("#stDays", this.days);
+    el.querySelectorAll("#stDays button").forEach(b => b.onclick = () => { this.days = +b.dataset.v; paintSeg("#stDays", this.days); this.load(); });
+    this.load();
+  },
+  async load() {
+    const box = $("#stBody"); if (!box) return;
+    try {
+      const j = await api("/api/stats?days=" + this.days), c = j.currency || "$";
+      if (!j.prints) { box.innerHTML = '<div class="mu">No prints in this time yet. Stats fill in as prints finish.</div>'; return; }
+      const kg = g => g >= 1000 ? (g / 1000).toFixed(2) + " kg" : Math.round(g) + " g";
+      const money = v => v == null ? "-" : c + v.toFixed(2);
+      let h = `<div class="kv2">
+        <div><span class="mu sm">Prints</span><b>${j.prints}</b><span class="fa sm">${j.done} done · ${j.failed} failed</span></div>
+        <div><span class="mu sm">Success rate</span><b style="color:${j.success_pct >= 80 ? "var(--ok)" : j.success_pct >= 50 ? "var(--ac)" : "var(--bad)"}">${j.success_pct}%</b></div>
+        <div><span class="mu sm">Hours printed</span><b>${j.hours}</b></div>
+        <div><span class="mu sm">Filament</span><b>${kg(j.grams)}</b><span class="fa sm">${j.meters} m</span></div>
+        <div><span class="mu sm">Cost</span><b>${money(j.cost)}</b></div></div>`;
+      if (j.months.length) h += `<div class="div"></div><div class="h">By month</div><table class="tbl"><tr><th>Month</th><th class="n">Prints</th><th class="n">Success</th><th class="n">Hours</th><th class="n">Filament</th><th class="n">Cost</th></tr>`
+        + j.months.map(m => `<tr><td>${new Date(m.month + "-15").toLocaleDateString([], {month: "short", year: "numeric"})}</td><td class="n">${m.prints}</td><td class="n">${Math.round(m.done * 100 / m.prints)}%</td><td class="n">${m.hours}</td><td class="n">${kg(m.grams)}</td><td class="n">${m.cost ? c + m.cost.toFixed(2) : "-"}</td></tr>`).join("") + "</table>";
+      if (j.top_files.length) h += `<div class="div"></div><div class="h">Most printed</div><table class="tbl"><tr><th>File</th><th class="n">Prints</th><th class="n">Success</th><th class="n">Filament</th></tr>`
+        + j.top_files.map(f => `<tr><td style="overflow-wrap:anywhere">${esc(f.job)}</td><td class="n">${f.prints}</td><td class="n">${Math.round(f.done * 100 / f.prints)}%</td><td class="n">${kg(f.grams)}</td></tr>`).join("") + "</table>";
+      if (j.fail_causes.length) h += `<div class="div"></div><div class="h">Why prints failed</div>` + j.fail_causes.map(f => `<div class="row" style="padding:4px 0"><span class="grow">${esc(f.cause)}</span><b class="num">${f.count}</b></div>`).join("");
+      if (Object.keys(j.by_type).length) h += `<div class="div"></div><div class="h">Filament by type</div>` + Object.entries(j.by_type).sort((a, b) => b[1] - a[1]).map(([t, g]) => `<div class="row" style="padding:4px 0"><span class="grow">${esc(t)}</span><b class="num">${kg(g)}</b></div>`).join("");
+      const e = j.estimate;
+      if (e) h += `<div class="div"></div><div class="h">Estimated vs real time</div><div class="sm" style="margin-bottom:8px">Over ${e.prints} finished prints, they took <b>${e.avg_pct}%</b> of the estimate on average (${e.avg_off_min >= 0 ? e.avg_off_min + " min longer" : -e.avg_off_min + " min shorter"}). Pauses don't count.</div>
+        <table class="tbl"><tr><th>Print</th><th class="n">Estimate</th><th class="n">Real</th></tr>` + e.recent.map(r => `<tr><td style="overflow-wrap:anywhere">${esc(r.job)}</td><td class="n">${mins(r.est)}</td><td class="n" style="color:${r.real > r.est * 1.1 ? "var(--bad)" : r.real < r.est * 0.9 ? "var(--ok)" : ""}">${mins(r.real)}</td></tr>`).join("") + "</table>";
+      box.innerHTML = h;
+    } catch (e) { box.innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
+  }
+};
+
+// ---------- Spools (AMS tab): grams left on each spool, and filament prices
+VIEWS.spools = {
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="h">Spools</div>
+      <div class="mu sm" style="margin-bottom:10px">Bambu spools with a tag report what's left by themselves (turn on "Estimate remaining filament" below). For other spools, type the grams on the spool once; each print takes off what it used. Before a print starts you're warned if a spool won't last.</div>
+      <div id="spList"><div class="mu sm">Loading...</div></div>
+      <div class="div"></div><div class="row"><div class="h grow" style="margin:0">Price per kg</div><span class="mu sm">Currency</span><input type="text" id="spCur" maxlength="3" style="width:56px;margin-left:8px"></div>
+      <div class="mu sm" style="margin:6px 0 10px">Used for the cost of each print. A type not listed uses its base type (PLA Matte uses PLA).</div>
+      <div id="spPrices" class="kv2"></div>
+      <div class="row ro-hide" style="margin-top:10px;gap:6px"><input type="text" id="spNewT" placeholder="Type, like PA6-CF" style="width:150px"><input type="number" id="spNewP" placeholder="Price" style="width:90px" min="0" step="0.01"><button class="btn sm" id="spAdd">Add</button></div></div>`;
+    $("#spAdd").onclick = async () => {
+      const t = $("#spNewT").value.trim(), v = $("#spNewP").value;
+      if (!t || v === "") return toast("Type a filament type and a price");
+      await setting({prices: {[t]: +v}}, "Saved"); $("#spNewT").value = $("#spNewP").value = ""; this.load();
+    };
+    $("#spCur").onchange = e => setting({currency: e.target.value}, "Saved");
+    this.load();
+  },
+  async load() {
+    if (!$("#spList")) return;
+    try {
+      const j = await api("/api/spools"), c = j.currency || "$";
+      $("#spCur").value = c; $("#spCur").disabled = readOnly;
+      const rows = j.spools.filter(r => !r.empty);
+      $("#spList").innerHTML = rows.length ? rows.map(r => {
+        const pct = r.left_g != null && r.full_g ? Math.max(0, Math.min(100, r.left_g * 100 / r.full_g)) : null;
+        const where = r.slot === 254 ? "External" : amsName(r.unit) + " · " + r.tray;
+        return `<div class="row" style="padding:8px 0;gap:10px;border-bottom:1px solid var(--line)"><span class="dot" style="background:${esc(r.color || "transparent")}"></span>
+          <div class="grow" style="min-width:0"><div style="font-weight:600">${esc(where)} · ${esc(r.type)}</div>
+          <div class="bar" style="margin:6px 0 4px;height:6px"><i style="width:${pct ?? 0}%;background:${pct != null && pct < 15 ? "var(--bad)" : "var(--ac)"}"></i></div>
+          <div class="fa sm">${r.left_g != null ? r.left_g + " g left" + (r.source === "rfid" ? " (from the spool's tag)" : "") : "Unknown, type the grams"}</div></div>
+          ${r.source === "rfid" || readOnly ? "" : `<input type="number" min="0" max="5000" step="10" placeholder="grams" data-sp="${r.slot}" style="width:90px"><button class="btn sm pri" data-spset="${r.slot}">Set</button>`}</div>`;
+      }).join("") : '<div class="mu sm">No spools loaded.</div>';
+      $("#spList").querySelectorAll("[data-spset]").forEach(b => b.onclick = async () => {
+        const v = $(`[data-sp="${b.dataset.spset}"]`).value;
+        if (v === "") return toast("Type the grams on the spool (a full 1 kg spool is 1000)");
+        try { await api("/api/spools/set", {slot: +b.dataset.spset, grams: +v}); toast("Saved"); this.load(); } catch (e) { toast(e.message); }
+      });
+      $("#spPrices").innerHTML = Object.entries(j.prices || {}).sort().map(([t, v]) => `<div><span class="mu sm">${esc(t)}</span>
+        <div class="row" style="gap:4px;margin-top:4px"><span>${esc(c)}</span><input type="number" min="0" step="0.01" value="${v}" data-pr="${esc(t)}" style="width:100%" ${readOnly ? "disabled" : ""}></div></div>`).join("");
+      $("#spPrices").querySelectorAll("[data-pr]").forEach(i => i.onchange = () => setting({prices: {[i.dataset.pr]: i.value === "" ? null : +i.value}}, "Price saved"));
+    } catch (e) { $("#spList").innerHTML = `<div style="color:var(--bad)" class="sm">${esc(e.message)}</div>`; }
+  }
+};
+
+// ---------- Settings (Printer tab): name, quiet hours, after a print, timelapse look
+VIEWS.prefs = {
+  build(el) {
+    const sw = (id, t, d) => `<div class="row" style="padding:6px 0"><div class="grow"><div style="font-weight:600">${t}</div>${d ? `<div class="mu sm">${d}</div>` : ""}</div><label class="sw"><input type="checkbox" id="${id}"><span></span></label></div>`;
+    el.innerHTML = `<div class="card"><div class="h">Settings</div>
+      <div class="row" style="gap:8px"><div class="grow"><div style="font-weight:600">Printer name</div><div class="mu sm">Shown at the top of the website and app, and in alerts</div></div>
+        <input type="text" id="sfName" maxlength="40" placeholder="PrintView" style="width:180px"></div>
+      <div class="div"></div>
+      ${sw("sfQuiet", "Quiet hours", "A running print switches to Silent speed during these hours, and back after")}
+      <div class="row" style="gap:8px;margin:4px 0 6px"><span class="mu sm">From</span><input type="time" id="sfQs"><span class="mu sm">to</span><input type="time" id="sfQe"></div>
+      ${sw("sfQLight", "Also turn the chamber light off", "The camera can't see in the dark, so spaghetti detection can't work while it's off")}
+      <div class="div"></div>
+      ${sw("sfCool", "Heaters off after a print", "Makes sure the nozzle and bed are off when a print ends")}
+      <div class="row" style="padding:6px 0"><div class="grow"><div style="font-weight:600">Light off after a print</div><div class="mu sm">Waits at least 3 minutes so the finish photos are taken</div></div>
+        <select id="sfLight"><option value="0">Never</option><option value="3">3 min</option><option value="10">10 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
+      <div class="div"></div>
+      ${sw("sfNext", "Check the plate before Start next", "Looks at the bed and asks before starting if something may be on it")}
+      ${sw("sfTl", "Name and progress bar on timelapses", "For new timelapse videos and Redo")}
+      ${sw("sfPub", "Show print stats to everyone", "The small stats under the status card")}
+      <div class="mu sm hide" id="sfQNow" style="margin-top:8px;color:var(--ac)"></div></div>`;
+    const S = (id, k) => $(id).onchange = e => setting({[k]: e.target.type === "checkbox" ? e.target.checked : e.target.value}, "Saved");
+    S("#sfName", "printer_name"); S("#sfQuiet", "quiet_on"); S("#sfQs", "quiet_start"); S("#sfQe", "quiet_end"); S("#sfQLight", "quiet_light");
+    S("#sfCool", "finish_cooldown"); S("#sfNext", "plate_check_next"); S("#sfTl", "tl_overlay"); S("#sfPub", "public_stats");
+    $("#sfLight").onchange = e => setting({finish_light_off_min: +e.target.value}, "Saved");
+    if (readOnly) el.querySelectorAll("input,select").forEach(i => i.disabled = true);
+  },
+  update(s) {
+    const st = s.settings || {}, a = document.activeElement;
+    const v = (id, val) => { const e = $(id); if (e && e !== a) { if (e.type === "checkbox") e.checked = !!val; else e.value = val ?? ""; } };
+    v("#sfName", st.printer_name); v("#sfQuiet", st.quiet_on); v("#sfQs", st.quiet_start); v("#sfQe", st.quiet_end); v("#sfQLight", st.quiet_light);
+    v("#sfCool", st.finish_cooldown); v("#sfLight", String(st.finish_light_off_min ?? 10)); v("#sfNext", st.plate_check_next !== false);
+    v("#sfTl", st.tl_overlay !== false); v("#sfPub", st.public_stats !== false);
+    const au = s.automation || {};
+    $("#sfQNow").classList.toggle("hide", !au.quiet_now);
+    $("#sfQNow").textContent = "Quiet hours are on right now.";
+  }
+};
+
+// ---------- Pi fan (Printer tab)
+VIEWS.pifan = {
+  build(el) {
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Pi fan</div><span class="chip" id="pfChip">-</span></div>
+      <div class="mu sm" id="pfTxt" style="margin:8px 0 10px"></div>
+      <div class="seg" id="pfMode"><button data-v="auto">Auto</button><button data-v="quiet">Quiet</button><button data-v="cool">Cool</button><button data-v="max">Max</button><button data-v="manual">Set %</button></div>
+      <div class="row hide" id="pfMan" style="margin-top:10px;gap:8px"><input type="range" min="0" max="100" step="5" id="pfPct" class="grow"><b class="num" id="pfPctV" style="width:44px;text-align:right"></b></div>
+      <div class="mu sm" style="margin-top:8px">Auto is the Pi's own curve. Quiet stays off until 60°C. Cool keeps at least 40%. At 75°C it always runs full speed. Changing it needs the master code.</div></div>`;
+    const canEdit = !readOnly && (role === "master" || window.PV_ADMIN);
+    el.querySelectorAll("#pfMode button").forEach(b => { b.disabled = !canEdit; b.onclick = () => this.set({mode: b.dataset.v}); });
+    $("#pfPct").disabled = !canEdit;
+    $("#pfPct").oninput = e => $("#pfPctV").textContent = e.target.value + "%";
+    $("#pfPct").onchange = e => this.set({mode: "manual", pct: +e.target.value});
+  },
+  async set(b) { try { await api("/api/pifan", b); toast("Fan: " + b.mode); } catch (e) { toast(e.message); } },
+  update(s) {
+    const f = s.pifan; if (!f || !$("#pfChip")) return;
+    paintSeg("#pfMode", f.mode);
+    $("#pfMan").classList.toggle("hide", f.mode !== "manual");
+    if (document.activeElement !== $("#pfPct")) { $("#pfPct").value = f.pct; $("#pfPctV").textContent = f.pct + "%"; }
+    $("#pfChip").textContent = !f.helper ? "Not set up" : f.found === false ? "No fan found" : (f.now_pct != null ? f.now_pct + "%" : "-") + (f.rpm ? " · " + f.rpm + " rpm" : "");
+    $("#pfChip").style.color = f.safety ? "var(--bad)" : "";
+    $("#pfTxt").textContent = !f.helper ? "The fan helper isn't running on the Pi. Run the update command to install it." : "Pi CPU " + (f.temp != null ? f.temp.toFixed(1) + "°C" : "--") + (f.safety ? " · too hot, running full speed" : "");
+  }
 };
 
 // ---------- Pi admin (only in the admin app on the Pi itself)
@@ -1681,10 +1885,11 @@ VIEWS.piadmin = {
 // ---------- the tabs
 VIEWS.control = compose(["controls", ["speed", "temps", "fans"]], ["controls", ["move", "options", "calib"], () => !readOnly], ["controls", ["gcode"], () => role === "master" && !readOnly]);
 VIEWS.printtab = compose(["job", null, printing], ["queue"], ["print"]);
-VIEWS.amstab = compose(["ams"], ["controls", ["amsopts"]]);
+VIEWS.amstab = compose(["ams"], ["spools"], ["controls", ["amsopts"]]);
+VIEWS.stats = compose(["statsv"]);
 VIEWS.safety = compose(["watch"], ["controls", ["plate"]], ["train"]);
 VIEWS.videos = compose(["timelapses"], ["history"]);
-VIEWS.printer = compose(["controls", ["info"]], ["activity"], ["controls", ["firmware"]], ["flow", null, () => role === "master" && !readOnly]);
+VIEWS.printer = compose(["controls", ["info"]], ["prefs"], ["pifan"], ["activity"], ["controls", ["firmware"]], ["flow", null, () => role === "master" && !readOnly]);
 
 // ---------- Command center (master code only)
 VIEWS.admin = {

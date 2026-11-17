@@ -172,9 +172,12 @@ cd ~/printview && git pull && ./install.sh
 - **Print tab:** SD card files with slicer thumbnails, an interactive **3D toolpath preview**, filament-to-AMS mapping, start now, **schedule for later**, or add to the **print queue** and tap *Start next* when a print is done. Upload, download, delete (deleted files are kept on the Pi). Skip objects mid-print.
 - **Control tab:** speed modes, temperatures with presets, fans, moving the axes, printer options, calibration, and a G-code console (master code).
 - **AMS tab:** every AMS unit and slot (including AMS HT), temperature and humidity, load / unload, set filament, K values.
-- **Safety tab:** local AI **spaghetti detection** with auto-pause, a **clear-plate check** when a print starts, and your own trainable model.
-- **Videos tab:** smooth per-layer **timelapses** made by the Pi, timelapses from the SD card, and print history with a photo of every finished print.
-- **Printer tab:** everything the printer reports, activity log, firmware versions (serial numbers hidden).
+- **Safety tab:** local AI **spaghetti detection** with auto-pause (it ignores the first layers, which fool it), a **clear-plate check** when a print starts and before *Start next*, and your own trainable model.
+- **Videos tab:** smooth per-layer **timelapses** made by the Pi (with the print name and a progress bar), timelapses from the SD card, and print history with a photo of every finished print.
+- **Stats tab:** success rate, hours, filament used and cost per month, most printed files, why prints failed, and the slicer's time estimate next to the real time.
+- **Spools and cost:** grams left on every spool (Bambu tags report it themselves, others you type in once), a warning before a print if a spool won't last, and the cost of every print from your price per kg.
+- **Print history notes:** rate any print 1 to 5 stars and add a note.
+- **Printer tab:** everything the printer reports, settings (printer name, quiet hours, light off after a print, timelapse look), the Pi's fan, activity log, firmware versions (serial numbers hidden).
 - **Android app** with the same features, a floating camera on every screen, and direct, paired access from anywhere.
 - **Public web link** with view-only visitors, a general code, and a master code with an Owner page (freeze everyone, change the general code, see who's watching).
 

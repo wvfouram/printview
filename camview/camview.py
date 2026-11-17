@@ -10,7 +10,7 @@ change the general code, and see who is logged in. Master browsers are never fro
 Files in ./data: key (link secret; delete + restart for a new link), sessions.json (logged-in browsers),
 state.json (freeze switch + general code set from the command center, which overrides ACCESS_CODE).
 """
-import hashlib, hmac, json, os, secrets, threading, time, urllib.error, urllib.request
+import hashlib, hmac, json, os, re, secrets, threading, time, urllib.error, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 APP = os.environ.get("APP", "http://127.0.0.1:8080")
@@ -469,6 +469,7 @@ def frame(path="/frame.jpg"):
 
 
 PAGE_FILE = os.path.join(HERE, "page.html")
+SAFE_PATH = re.compile(r"/[A-Za-z0-9_./-]*")
 
 
 class H(BaseHTTPRequestHandler):
@@ -536,6 +537,10 @@ class H(BaseHTTPRequestHandler):
 
     def route(self, method):
         path, _, query = self.path.partition("?")
+        # Only plain paths. Encoded (%61), doubled (//), dot (/./, /../) or backslash paths could slip past
+        # the block lists below and still reach the same place in PrintView, so they're refused outright.
+        if not SAFE_PATH.fullmatch(path) or "//" in path or "/." in path:
+            return self.send(400, "bad path")
         if path != BASE and not path.startswith(BASE + "/"):
             return self.send(404, "not found")
         sub = path[len(BASE):] or "/"
@@ -603,6 +608,8 @@ class H(BaseHTTPRequestHandler):
             return self.proxy(method, sub, data)
         if sub == "/api/streams" and s["role"] != "master":
             return self.json(403, {"ok": False, "error": "Needs the master code"})
+        if method == "POST" and sub == "/api/pifan" and s["role"] != "master":
+            return self.json(403, {"ok": False, "error": "The Pi fan needs the master code"})
         if method == "POST" and sub == "/api/prints/photos/delete" and s["role"] != "master":
             return self.json(403, {"ok": False, "error": "Needs the master code"})
         if method == "POST" and sub == "/api/train/photo":     # teaching the detector: master code only
@@ -771,6 +778,7 @@ class H(BaseHTTPRequestHandler):
             c.putrequest("POST", "/api/upload?" + query)
             c.putheader("Content-Type", "application/octet-stream")
             c.putheader("Content-Length", str(n))
+            c.putheader("X-PV-Web", "1")
             c.endheaders()
             left = n
             while left:
@@ -815,6 +823,7 @@ class H(BaseHTTPRequestHandler):
         if data is None and method == "POST":
             data = self.body()
         req = urllib.request.Request(APP + sub, data=data, method=method)
+        req.add_header("X-PV-Web", "1")         # PrintView refuses web-link-blocked paths on its side too
         if data is not None:
             req.add_header("Content-Type", "application/json")
         if method == "GET" and self.headers.get("Range"):

@@ -10,9 +10,29 @@ from collections import deque
 log = logging.getLogger("store")
 
 
+def _hhmm(v):
+    """'22:30' -> minutes after midnight, or None."""
+    try:
+        h, m = str(v).strip().split(":")
+        h, m = int(h), int(m)
+        return h * 60 + m if 0 <= h < 24 and 0 <= m < 60 else None
+    except (ValueError, TypeError):
+        return None
+
+
 class Settings:
     DEFAULTS = {"auto_pause": True, "sensitivity": "medium", "notify_finish": True, "use_custom": True,
-                "plate_check": True, "plate_pause": False}
+                "plate_check": True, "plate_pause": False,
+                "first_layer_grace": 2,          # spaghetti watch ignores this many first layers
+                "plate_check_next": True,        # "Start next" looks at the plate first
+                "quiet_on": False, "quiet_start": "22:00", "quiet_end": "07:00", "quiet_light": False,
+                "finish_cooldown": True, "finish_light_off_min": 10,
+                "tl_overlay": True, "public_stats": True,
+                "currency": "$", "printer_name": "",
+                "prices": {"PLA": 20, "PETG": 20, "ABS": 22, "ASA": 25, "TPU": 35, "PLA-CF": 32, "PETG-CF": 32,
+                           "PA": 45, "PA-CF": 60, "PC": 35, "PVA": 50, "HIPS": 25}}
+    BOOLS = ("auto_pause", "notify_finish", "use_custom", "plate_check", "plate_pause", "plate_check_next",
+             "quiet_on", "quiet_light", "finish_cooldown", "tl_overlay", "public_stats")
 
     def __init__(self, path):
         self.path = path
@@ -28,10 +48,35 @@ class Settings:
 
     def update(self, changes: dict):
         for k, v in changes.items():
-            if k in ("auto_pause", "notify_finish", "use_custom", "plate_check", "plate_pause"):
-                self.data[k] = bool(v)
-            elif k == "sensitivity" and v in ("low", "medium", "high"):
-                self.data[k] = v
+            try:
+                if k in self.BOOLS:
+                    self.data[k] = bool(v)
+                elif k == "sensitivity" and v in ("low", "medium", "high"):
+                    self.data[k] = v
+                elif k == "first_layer_grace":
+                    self.data[k] = max(0, min(10, int(v)))
+                elif k == "finish_light_off_min":
+                    v = int(v)
+                    self.data[k] = 0 if v <= 0 else max(3, min(240, v))   # never before the finish photos are taken
+                elif k in ("quiet_start", "quiet_end") and _hhmm(v) is not None:
+                    self.data[k] = "%02d:%02d" % divmod(_hhmm(v), 60)
+                elif k == "printer_name" and isinstance(v, str):
+                    self.data[k] = " ".join(v.split())[:40]
+                elif k == "currency" and isinstance(v, str):
+                    self.data[k] = v.strip()[:3] or "$"
+                elif k == "prices" and isinstance(v, dict):
+                    pr = dict(self.get("prices"))
+                    for t, x in v.items():
+                        t = str(t).strip().upper()[:16]
+                        if not t:
+                            continue
+                        if x in (None, ""):
+                            pr.pop(t, None)
+                        else:
+                            pr[t] = round(max(0.0, min(10000.0, float(x))), 2)
+                    self.data[k] = pr
+            except (ValueError, TypeError):
+                continue
         try:
             with open(self.path, "w") as f:
                 json.dump(self.data, f)
@@ -86,7 +131,16 @@ class Notifier:
             return
         threading.Thread(target=self._send, args=(title, message, priority, tags, image), daemon=True).start()
 
+    name_fn = None      # the printer's name from Settings, put in front of every alert title
+
     def _send(self, title, message, priority, tags, image):
+        try:
+            name = (self.name_fn() or "").strip() if self.name_fn else ""
+        except Exception:  # noqa: BLE001
+            name = ""
+        if name:
+            title = f"{name}: {title}"
+        title = title.encode("latin-1", "replace").decode("latin-1")
         headers = {"Title": title, "Priority": priority}
         open_url = (os.environ.get("OPEN_URL") or "").strip()
         if open_url:

@@ -135,7 +135,9 @@ def _ams(p):
                           "color": "#" + color if len(color) == 6 else None,
                           "remain": _int(t.get("remain")), "active": slot == now,
                           "empty": not t.get("tray_type"), "idx": t.get("tray_info_idx") or "",
-                          "k": _num(t.get("k")), "cali_idx": _int(t.get("cali_idx"))})
+                          "k": _num(t.get("k")), "cali_idx": _int(t.get("cali_idx")),
+                          "weight": _int(t.get("tray_weight")),
+                          "rfid": (t.get("tray_uuid") or "0").strip("0") != ""})
     vt = p.get("vt_tray") if isinstance(p.get("vt_tray"), dict) else None
     ext = None
     if vt:

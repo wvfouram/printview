@@ -13,6 +13,7 @@ nearly full SD card and turns itself on once PrintWatch runs from the SSD.
 """
 import io
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -28,6 +29,7 @@ SAMPLE_S = 0.4              # don't look at frames faster than this
 IN_FPS = 20                 # one layer = one source frame at this rate
 OUT_FPS = 60                # after interpolation
 OUT_W = 1920
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 ACTIVE = ("RUNNING", "PAUSE", "PREPARE", "SLICING")
 
 
@@ -38,7 +40,8 @@ def _thumb(jpeg):
 
 
 class Timelapse:
-    def __init__(self, camera, printer, data_dir, events=None):
+    def __init__(self, camera, printer, data_dir, events=None, settings=None):
+        self.settings = settings
         self.camera, self.printer, self.events = camera, printer, events
         self.root = os.path.join(data_dir, "timelapse")
         os.makedirs(self.root, exist_ok=True)
@@ -287,17 +290,37 @@ class Timelapse:
             f"scale={OUT_W}:-2:flags=lanczos",
             "unsharp=5:5:0.25:5:5:0",              # gentle, luma only (stronger made the grain worse)
         ])
-        cmd = ["nice", "-n", "19", "ffmpeg", "-y", "-loglevel", "error",
-               "-framerate", str(IN_FPS), "-i", os.path.join(d, "frames", "%05d.jpg"),
-               "-vf", vf, "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-tune", "film",
-               "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-threads", "3",
-               "-progress", "pipe:1", "-nostats", tmp]
-        self.msg = f"Rendering {tid} (this takes a while)"
         try:
             n_in = len([n for n in os.listdir(os.path.join(d, "frames")) if n.endswith(".jpg")])
         except OSError:
             n_in = 0
         total = max(1, int(n_in / IN_FPS * OUT_FPS))
+        inputs = ["-framerate", str(IN_FPS), "-i", os.path.join(d, "frames", "%05d.jpg")]
+        overlay = self.settings is None or self.settings.get("tl_overlay") is not False
+        if overlay and os.path.exists(FONT):
+            # print name top-left, progress bar along the bottom
+            try:
+                with open(os.path.join(d, "meta.json")) as f:
+                    title = json.load(f).get("job") or ""
+            except (OSError, ValueError):
+                title = ""
+            title = re.sub(r"(?i)(\.gcode)?\.3mf$", "", os.path.basename(title))[:80] or "Print"
+            with open(os.path.join(d, "title.txt"), "w") as f:
+                f.write(title)
+            dur = max(0.1, total / OUT_FPS)
+            fg = (f"[0:v]{vf},drawtext=fontfile={FONT}:textfile='{os.path.join(d, 'title.txt')}':expansion=none:x=36:y=30:fontsize=42:"
+                  f"fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=14,"
+                  f"drawbox=x=0:y=ih-12:w=iw:h=12:color=black@0.5:t=fill[bg];"
+                  f"[1:v]format=rgba[bar];[bg][bar]overlay=x='-w+W*t/{dur:.3f}':y=H-12:shortest=1[out]")
+            inputs += ["-f", "lavfi", "-i", f"color=c=0xFFB224:s={OUT_W}x12:r={OUT_FPS}"]
+            filt = ["-filter_complex", fg, "-map", "[out]"]
+        else:
+            filt = ["-vf", vf]
+        cmd = ["nice", "-n", "19", "ffmpeg", "-y", "-loglevel", "error", *inputs, *filt,
+               "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-tune", "film",
+               "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-threads", "3",
+               "-progress", "pipe:1", "-nostats", tmp]
+        self.msg = f"Rendering {tid} (this takes a while)"
         t0 = time.time()
         self.progress = {"pct": 0, "eta_s": None, "started": int(t0)}
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

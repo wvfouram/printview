@@ -33,6 +33,9 @@ from .platecheck import PlateCheck
 from .usbcam import USBCam
 from .usbaudio import USBAudio
 from .printqueue import PrintQueue
+from .spools import Spools, mapping_to_slot
+from .automation import Automation
+from .pifan import PiFan
 from . import remote as rm
 from .store import Events, Notifier, Settings
 from .trainer import Trainer
@@ -64,6 +67,7 @@ def build_app():
     settings = Settings(os.path.join(data_dir, "settings.json"))
     events = Events(os.path.join(data_dir, "events.json"))
     notifier = Notifier(env("NTFY_URL"), env("NTFY_TOKEN"))
+    notifier.name_fn = lambda: settings.get("printer_name")
     card = sd.SDCard(ip, code, os.path.join(data_dir, "sdcache"))
     dataset = Dataset(data_dir, float(env("DATASET_MAX_GB", "3")))
     trainer = Trainer(dataset, os.path.join(data_dir, "custom_model.npz"), events)
@@ -93,7 +97,7 @@ def build_app():
 
     printer.on_change(on_state)
 
-    app = web.Application(middlewares=[stream_middleware, remote_middleware, auth_middleware])
+    app = web.Application(middlewares=[stream_middleware, web_link_middleware, remote_middleware, auth_middleware])
     app["remote_port"] = int(env("REMOTE_PORT", "8443")) if env("REMOTE", "on") != "off" else 0
     app["remote_host"] = (env("REMOTE_HOST") or "").strip()
     app["devices"] = rm.Devices(os.path.join(data_dir, "devices.json"))
@@ -101,7 +105,7 @@ def build_app():
     app["upnp"] = rm.UPnP(app["remote_port"]) if app["remote_port"] and env("UPNP", "on") != "off" else None
     if app["remote_port"]:
         app["cert"] = rm.ensure_cert(data_dir)
-    app["timelapse"] = Timelapse(camera, printer, data_dir, events)
+    app["timelapse"] = Timelapse(camera, printer, data_dir, events, settings)
     app["hms"] = HMS(data_dir)
     app["predict"] = Predictor(printer, data_dir)
 
@@ -115,7 +119,11 @@ def build_app():
     app["usbaudio"] = USBAudio()
     app["queue"] = PrintQueue(printer, data_dir, lambda b: _start_from_body(app, b), events)
     app["plate"] = PlateCheck(printer, camera, detector, notifier, events, settings, data_dir)
-    app["history"] = History(printer, camera, data_dir, app["timelapse"])
+    app["spools"] = Spools(printer, settings, data_dir)
+    app["history"] = History(printer, camera, data_dir, app["timelapse"], resolver=lambda job: _resolve_job_sync(app),
+                             spools=app["spools"], cause_fn=lambda: _fail_cause(app))
+    app["automation"] = Automation(printer, settings, events)
+    app["pifan"] = PiFan(data_dir)
     threading.Thread(target=_weekly_report, args=(app, data_dir), daemon=True, name="report").start()
     app["schedule"] = Scheduler(printer, data_dir, _sched_start, events,
                                 lambda t, m: notifier.send(t, m, tags="alarm_clock"))
@@ -168,6 +176,14 @@ def build_app():
     app.router.add_get("/api/schedule", api_schedule)
     app.router.add_get("/api/history", api_history)
     app.router.add_get("/api/history/photo/{name}", api_history_photo)
+    app.router.add_post("/api/history/{hid}/note", api_history_note)
+    app.router.add_get("/api/stats", api_stats)
+    app.router.add_get("/api/stats/public", api_stats_public)
+    app.router.add_get("/api/spools", api_spools)
+    app.router.add_post("/api/spools/set", api_spools_set)
+    app.router.add_post("/api/spools/check", api_spools_check)
+    app.router.add_get("/api/pifan", api_pifan)
+    app.router.add_post("/api/pifan", api_pifan_set)
     app.router.add_get("/api/report", api_report)
     app.router.add_post("/api/report/send", api_report_send)
     app.router.add_post("/api/schedule", api_schedule_add)
@@ -207,6 +223,8 @@ def build_app():
         printer.start()
         app["bedctl"].start()
         detector.start()
+        app["automation"].start()
+        app["loop"] = asyncio.get_running_loop()
         if app["upnp"]:
             app["upnp"].start()
         log.info("PrintWatch up - printer %s (%s)", ip, serial[-4:].rjust(len(serial), "*"))
@@ -259,6 +277,20 @@ async def stream_middleware(request, handler):
 
 
 @web.middleware
+async def web_link_middleware(request, handler):
+    """Requests passed on by the public web link (camview marks them). Second line of defence:
+    even if something slipped past camview's own checks, these never work from the web link."""
+    if request.headers.get("X-PV-Web") and request.remote in ("127.0.0.1", "::1"):
+        request["web"] = True
+        if request.path.startswith(WEB_BLOCKED):
+            raise web.HTTPForbidden(text="not from the web link")
+    return await handler(request)
+
+
+WEB_BLOCKED = ("/api/pair", "/api/remote", "/api/login", "/api/camview", "/api/bed/", "/api/timelapse/import", "/lan/")
+
+
+@web.middleware
 async def remote_middleware(request, handler):
     """Requests on the remote (HTTPS) port must carry a paired device key."""
     app = request.app
@@ -269,7 +301,7 @@ async def remote_middleware(request, handler):
         return await handler(request)
     ip = request.remote or "?"
     if ip in ("127.0.0.1", "::1"):  # via Tailscale Funnel: use the real caller
-        ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or ip
+        ip = request.headers.get("X-Forwarded-For", "").split(",")[-1].strip() or ip   # last entry: the one the proxy added
     if app["throttle"].is_blocked(ip):
         raise web.HTTPForbidden(text="blocked")
     auth = request.headers.get("Authorization", "")
@@ -341,6 +373,9 @@ def full_status(app):
         "cam2": app["usbcam"].status(),
         "audio": app["usbaudio"].status(),
         "queue": app["queue"].status(),
+        "automation": app["automation"].status(),
+        "pifan": app["pifan"].status(),
+        "name": app["settings"].get("printer_name") or "",
     }
 
 
@@ -371,7 +406,7 @@ async def api_tl_list(request):
 
 async def api_tl_import(request):
     """Add a finished video (from the Pi admin app) to the Videos list. Not reachable through the web link."""
-    if request.get("remote"):
+    if request.get("remote") or request.get("web"):
         raise web.HTTPForbidden()
     name = re.sub(r'[\\/:*?"<>|\r\n]+', "_", os.path.basename(request.query.get("name", "video")))
     name = re.sub(r"(?i)\.(mp4|mov|m4v)$", "", name)[:120] or "video"
@@ -563,7 +598,29 @@ async def api_queue_add(request):
 
 async def api_queue_next(request):
     try:
-        it = await _run(request.app["queue"].start_next)
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    app = request.app
+    if not b.get("force"):
+        q = app["queue"].list()
+        if not q:
+            return web.json_response({"ok": False, "error": "the queue is empty"}, status=400)
+        reasons, photo = [], False
+        if app["settings"].get("plate_check_next") and app["settings"].get("plate_check") is not False:
+            r = await _run(app["plate"].check_now, q[0]["name"])
+            if not r.get("ok"):
+                reasons += r.get("reasons") or []
+                photo = True
+        try:
+            reasons += await _spool_warnings(app, q[0]["body"])
+        except Exception:  # noqa: BLE001
+            pass
+        if reasons:
+            return web.json_response({"ok": False, "error": "Check before starting: " + "; ".join(reasons),
+                                      "preflight": {"reasons": reasons, "photo": photo}}, status=409)
+    try:
+        it = await _run(app["queue"].start_next)
     except ValueError as e:
         return web.json_response({"ok": False, "error": str(e)}, status=400)
     return web.json_response({"ok": True, "item": it})
@@ -1072,6 +1129,165 @@ async def api_report_send(request):
     return web.json_response({"ok": True})
 
 
+def _job_filaments(plate, mapping, use_ams, trays=None):
+    """Filaments of a plate with the slot each one is printed from."""
+    out = []
+    for fl in plate.get("filaments") or []:
+        slot = None
+        if not use_ams:
+            slot = 254
+        elif mapping and 0 < fl["id"] <= len(mapping):
+            slot = mapping_to_slot(mapping[fl["id"] - 1])
+        out.append({"id": fl["id"], "type": fl.get("type"), "color": fl.get("color"), "used_g": fl.get("used_g"),
+                    "used_m": fl.get("used_m"), "g": fl.get("used_g"), "slot": slot})
+    return out
+
+
+async def _spool_warnings(app, body):
+    _, plates = await _plates(app, str(body.get("path", "")))
+    pl = next((p for p in plates if p["index"] == int(body.get("plate", 1))), None)
+    if not pl:
+        return []
+    fil = _job_filaments(pl, body.get("ams_mapping") or [], bool(body.get("use_ams", True)))
+    return app["spools"].check(fil)
+
+
+def _guess_slots(app, fil):
+    """Prints started from Bambu Studio: no mapping known, so match each filament to a loaded spool
+    of the same type with the closest color."""
+    ams = app["printer"].status().get("ams") or {}
+    trays = [t for t in ams.get("trays") or [] if not t.get("empty")]
+    if ams.get("external") and ams["external"].get("type"):
+        trays.append(ams["external"])
+
+    def dist(a, b):
+        try:
+            a, b = a.lstrip("#"), b.lstrip("#")
+            return sum((int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) ** 2 for i in (0, 2, 4))
+        except (ValueError, AttributeError, IndexError):
+            return 10 ** 6
+    for f in fil:
+        same = [t for t in trays if (t.get("type") or "").upper() == (f.get("type") or "").upper()]
+        if same:
+            f["slot"] = min(same, key=lambda t: dist(f.get("color") or "", t.get("color") or ""))["slot"]
+    return fil
+
+
+def _resolve_job_sync(app):
+    """Runs in a thread when a print starts: find its file and plate on the SD card."""
+    loop = app.get("loop")
+    if not loop:
+        return None
+    j = asyncio.run_coroutine_threadsafe(_current_job(app), loop).result(180)
+    if not j or not j.get("plate"):
+        return None
+    hint = app["job_hint"]
+    from_app = hint.get("path") == j["path"] and time.time() - hint.get("t", 0) < 6 * 3600
+    mapping = hint.get("mapping") if from_app else None
+    use_ams = hint.get("use_ams", True) if from_app else True
+    fil = _job_filaments(j["plate"], mapping, use_ams)
+    if not from_app:
+        fil = _guess_slots(app, fil)
+    return {"path": j["path"], "plate": j["plate"].get("index"), "seconds": j["plate"].get("seconds"),
+            "filaments": fil, "mapping": None, "use_ams": use_ams}
+
+
+def _fail_cause(app):
+    if app["detector"].acted:
+        return "Spaghetti detected"
+    pc = app["plate"].result or {}
+    if pc.get("ok") is False and time.time() - pc.get("t", 0) < 1800 and app["settings"].get("plate_pause"):
+        return "Plate wasn't clear"
+    try:
+        items = app["hms"].status(app["printer"]).get("items") or []
+    except Exception:  # noqa: BLE001
+        items = []
+    if items:
+        return "Printer error: " + str(items[0].get("text") or items[0].get("code"))[:120]
+    if app["printer"].status().get("print_error"):
+        return "Printer error " + format(app["printer"].status()["print_error"] & 0xFFFFFFFF, "08X")
+    if not app["printer"].status().get("connected"):
+        return "Printer went offline"
+    return "Stopped (by you or on the printer)"
+
+
+async def api_history_note(request):
+    b = await request.json()
+    try:
+        it = request.app["history"].note(request.match_info["hid"], b.get("note"), b.get("stars"))
+    except (ValueError, TypeError) as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "item": it})
+
+
+async def api_stats(request):
+    try:
+        days = int(request.query.get("days", "0"))
+    except ValueError:
+        days = 0
+    since = time.time() - days * 86400 if days > 0 else 0
+    st = request.app["history"].full_stats(since, request.app["settings"].get("currency") or "$")
+    st["days"] = days
+    return web.json_response(st)
+
+
+async def api_stats_public(request):
+    """The small stats card everyone sees on the web link (no money)."""
+    if not request.app["settings"].get("public_stats"):
+        return web.json_response({"enabled": False})
+    h = request.app["history"]
+    lt = time.localtime()
+    month0 = time.mktime((lt.tm_year, lt.tm_mon, 1, 0, 0, 0, 0, 0, -1))
+    m, a = h.full_stats(month0), h.full_stats(0)
+    pick = lambda x: {k: x[k] for k in ("prints", "done", "success_pct", "hours", "grams")}
+    return web.json_response({"enabled": True, "name": request.app["settings"].get("printer_name") or "",
+                              "month": pick(m), "all": pick(a)})
+
+
+async def api_spools(request):
+    app = request.app
+    return web.json_response({"spools": app["spools"].view(), "prices": app["settings"].get("prices"),
+                              "currency": app["settings"].get("currency")})
+
+
+async def api_spools_set(request):
+    b = await request.json()
+    try:
+        rows = request.app["spools"].set(b.get("slot"), b.get("grams"), b.get("full"))
+    except (ValueError, TypeError) as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "spools": rows})
+
+
+async def api_spools_check(request):
+    """Before a start: will the loaded spools last, and what will it cost?"""
+    b = await request.json()
+    app = request.app
+    try:
+        _, plates = await _plates(app, str(b.get("path", "")))
+    except Exception as e:  # noqa: BLE001
+        return _sd_error(e)
+    pl = next((p for p in plates if p["index"] == int(b.get("plate", 1))), None)
+    if not pl:
+        return web.json_response({"warnings": [], "cost": None})
+    fil = _job_filaments(pl, b.get("ams_mapping") or [], bool(b.get("use_ams", True)))
+    return web.json_response({"warnings": app["spools"].check(fil), "cost": app["spools"].cost(fil),
+                              "currency": app["settings"].get("currency"),
+                              "grams": round(sum(f.get("g") or 0 for f in fil), 1)})
+
+
+async def api_pifan(request):
+    return web.json_response(request.app["pifan"].status())
+
+
+async def api_pifan_set(request):
+    b = await request.json()
+    try:
+        return web.json_response(request.app["pifan"].set(b.get("mode"), b.get("pct")))
+    except (ValueError, TypeError) as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+
+
 async def api_history(request):
     return web.json_response({"items": request.app["history"].list()})
 
@@ -1089,7 +1305,8 @@ def _start_from_body(app, b):
                                     bool(b.get("bed_leveling", True)), bool(b.get("flow_cali", False)),
                                     bool(b.get("vibration_cali", True)))
     if ok:
-        app["job_hint"].update(path=b.get("path"), plate=int(b.get("plate", 1)), t=time.time())
+        app["job_hint"].update(path=b.get("path"), plate=int(b.get("plate", 1)), t=time.time(),
+                                      mapping=b.get("ams_mapping") or [], use_ams=bool(b.get("use_ams", True)))
         try:
             lvl = int(b.get("speed") or 2)
         except (TypeError, ValueError):
@@ -1157,7 +1374,8 @@ async def api_print_start(request):
     except (ValueError, TypeError) as e:
         return web.json_response({"ok": False, "error": str(e)}, status=400)
     if ok:
-        request.app["job_hint"].update(path=b.get("path"), plate=int(b.get("plate", 1)), t=time.time())
+        request.app["job_hint"].update(path=b.get("path"), plate=int(b.get("plate", 1)), t=time.time(),
+                                      mapping=b.get("ams_mapping") or [], use_ams=bool(b.get("use_ams", True)))
         request.app["events"].add("cmd", f"Print started from app: {os.path.basename(str(b.get('path')))}")
     return web.json_response({"ok": bool(ok), "error": None if ok else "printer not connected"},
                              status=200 if ok else 503)
@@ -1296,7 +1514,7 @@ def _remote_info(app):
 
 async def api_pair(request):
     """Give this phone a key for remote access. Only on the home network."""
-    if request.get("remote") or not rm.is_private(request.remote or ""):
+    if request.get("remote") or request.get("web") or not rm.is_private(request.remote or ""):
         raise web.HTTPForbidden(text="pair from your home Wi-Fi")
     app = request.app
     if not app["remote_port"]:

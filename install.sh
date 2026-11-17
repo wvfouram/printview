@@ -95,6 +95,25 @@ if [[ "${WANT,,}" == y* ]]; then
   echo "    Anyone with this link can watch. Controls need your general or master code."
 fi
 
+# ---------------------------------------------------------------- 5. Pi fan helper (runs outside Docker)
+if [[ -d /sys/devices/platform/cooling_fan ]]; then
+  say "Installing the Pi fan helper (lets the Printer tab change the Pi's fan)..."
+  sudo tee /etc/systemd/system/pvfan.service >/dev/null <<UNIT
+[Unit]
+Description=PrintView Pi fan helper
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/python3 $(pwd)/pvadmin/pvfan.py $(pwd)/data
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  sudo systemctl daemon-reload && sudo systemctl enable --now pvfan && sudo systemctl restart pvfan && ok "Pi fan helper running"
+fi
+
 say "All done."
 PI_IP=$(hostname -I | awk '{print $1}')
 echo "    Android app: install PrintView.apk from the Releases page on GitHub, open it, tap the gear icon,"
