@@ -539,6 +539,7 @@ class H(BaseHTTPRequestHandler):
                          "script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; "
                          "base-uri 'none'; form-action 'self'")
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Robots-Tag", "noindex, nofollow, noarchive")   # search engines: don't list anything here
         self.send_header("Strict-Transport-Security", "max-age=31536000")
         super().end_headers()
 
