@@ -64,7 +64,7 @@ BLOCKED = ("/api/pair", "/api/remote", "/api/login", "/api/camview", "/api/bed/"
 READ_ONLY = ("/api/status", "/api/job", "/api/job/plate.png")
 # Anyone with the link may look at (GET) everything else too, except these. Nothing that changes anything
 # is a GET, so view-only can never change the printer; uploads are POSTs and stay blocked.
-PUBLIC_DENY = ("/api/streams", "/api/audio.pcm", "/api/pa", "/api/settings")
+PUBLIC_DENY = ("/api/audio.pcm",)          # live sound stays master-only; the Owner page (/admin/) is master-only below
 
 
 def hide_serials(body):
@@ -78,6 +78,20 @@ def hide_serials(body):
         return json.dumps(j).encode()
     except Exception:
         return body
+_IP = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[0-9a-fA-F]{1,4}:){3,7}[0-9a-fA-F]{1,4}\b")
+_SN = re.compile(r'(\\?"(?:sn|serial|dev_id|mac|ip|addr)\\?"\s*:\s*)(\\?"[^"\\]*\\?"|\d+)', re.I)
+_SERIAL = re.compile(r"\b(?=[0-9A-Z]*\d)(?=[0-9A-Z]*[A-Z])[0-9A-Z]{14,16}\b")
+_LANTOK = re.compile(r"(/lan/tl/[^/\s]+/)[^/\s]+")
+
+
+def redact(text):
+    """Data flow for anyone but the master code: no IP addresses, serial numbers or private download links."""
+    text = _SN.sub(lambda m: m.group(1) + ('\\"hidden\\"' if '\\"' in m.group(1) else '"hidden"'), text)
+    text = _IP.sub("x.x.x.x", text)
+    text = _SERIAL.sub("SERIAL", text)
+    return _LANTOK.sub(r"\1hidden", text)
+
+
 _rlock = threading.Lock()
 _rcache = [b"", 0.0]
 
@@ -581,6 +595,8 @@ class H(BaseHTTPRequestHandler):
         # Read-only view: no code (or frozen) can still see status, AMS and the current job, never change them.
         s = session(self.cookie(), self.ip())
         view_only = not s or (s["role"] != "master" and _state["frozen"])
+        if method == "GET" and sub == "/api/streams" and not (s and s["role"] == "master" and not view_only):
+            return self.public_streams(query)      # everyone may watch the data flow, minus addresses and serials
         if view_only and method == "GET" and sub in READ_ONLY:
             return self.read_only(sub)
         if view_only and method == "GET" and sub.startswith("/api/") and not sub.startswith(BLOCKED + PUBLIC_DENY):
@@ -606,8 +622,6 @@ class H(BaseHTTPRequestHandler):
             if act == "gcode":
                 return self.json(403, {"ok": False, "error": "Raw G-code needs the master code"})
             return self.proxy(method, sub, data)
-        if sub == "/api/streams" and s["role"] != "master":
-            return self.json(403, {"ok": False, "error": "Needs the master code"})
         if method == "POST" and sub == "/api/pifan" and s["role"] != "master":
             return self.json(403, {"ok": False, "error": "The Pi fan needs the master code"})
         if method == "POST" and sub == "/api/prints/photos/delete" and s["role"] != "master":
@@ -641,6 +655,14 @@ class H(BaseHTTPRequestHandler):
         if method == "GET" and sub == "/detection.jpg":
             return self.proxy(method, sub)
         return self.send(404, "not found")
+
+    def public_streams(self, query):
+        try:
+            with urllib.request.urlopen(APP + "/api/streams" + ("?" + query if query else ""), timeout=10) as r:
+                body = r.read().decode("utf-8", "replace")
+        except Exception:
+            return self.json(502, {"ok": False, "error": "PrintWatch isn't answering"})
+        return self.send(200, redact(body), "application/json")
 
     def read_only(self, sub):
         """Status is cached for a second so lots of viewers cost the printer app one request a second.

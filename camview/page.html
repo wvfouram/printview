@@ -1985,7 +1985,7 @@ VIEWS.pihealth = {
       + `<div><span class="mu sm">Running for</span><b>${p.up_h != null ? (p.up_h >= 48 ? Math.round(p.up_h / 24) + " days" : Math.round(p.up_h) + " h") : "--"}</b></div>`;
   }
 };
-VIEWS.printer = compose(["pihealth"], ["controls", ["info"]], ["activity"], ["controls", ["firmware"]], ["flow", null, () => role === "master" && !readOnly]);
+VIEWS.printer = compose(["pihealth"], ["controls", ["info"]], ["activity"], ["controls", ["firmware"]], ["flow"]);
 
 // ---------- Command center (master code only)
 VIEWS.admin = {
