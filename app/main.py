@@ -351,6 +351,11 @@ async def index(request):
     return web.FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+def _ago(sec):
+    sec = int(sec)
+    return f"{sec // 86400} days" if sec >= 2 * 86400 else f"{sec // 3600} h" if sec >= 3600 else f"{max(1, sec // 60)} min"
+
+
 def _pi_health():
     """The Pi's own CPU temperature, memory and storage (readable from inside the container)."""
     out = {}
@@ -1127,7 +1132,7 @@ def build_report(app, days=7):
         f"Prints: {h['prints']} ({h['done']} done, {h['failed']} failed), {h['hours']} h printing",
         f"Bed controller: {'FAULT: ' + str(bc.get('fault')) if bc.get('fault') else 'OK'}, Uno glitches {us.get('X', '?')}",
         f"Disk: {tl.get('free_gb')} GB free",
-        f"PrintView up {round((time.time() - STARTED_AT) / 86400, 1)} days, printer {'online' if app['printer'].status().get('connected') else 'OFFLINE'}",
+        f"PrintView software running {_ago(time.time() - STARTED_AT)} (since its last restart or update), Pi on for {_ago((_pi_health().get('up_h') or 0) * 3600)}, printer {'online' if app['printer'].status().get('connected') else 'OFFLINE'}",
     ]
     return {"days": days, "lines": lines, "stats": h}
 

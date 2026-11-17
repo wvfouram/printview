@@ -744,6 +744,18 @@ class H(BaseHTTPRequestHandler):
                     del _sessions[k]
                 _save_sessions()
             return self.json(200, {"ok": True})
+        if method == "POST" and sub == "/admin/new_link":
+            # A new secret link: the old one stops working right away and everyone is logged out.
+            global KEY, BASE
+            KEY = secrets.token_urlsafe(12)
+            with open(KEYF, "w") as f:
+                f.write(KEY)
+            BASE = "/" + KEY
+            with _slock:
+                _sessions.clear()
+                _save_sessions()
+            print("link path: " + BASE, flush=True)
+            return self.json(200, {"ok": True, "path": BASE})
         if method == "POST" and sub == "/admin/kick_all" and me is None:
             role = b.get("role")
             if role in ("general", "master"):

@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0a0b0d">
 <title>PrintView</title>
 <style>
-:root{--bg:#0b0c0e;--s1:#141619;--s2:#1c1f23;--s3:#24282d;--line:#2a2e34;--line2:#353a41;--tx:#f2f0eb;--mu:#9097a1;--fa:#5f656e;
+:root{--bg:#0b0c0e;--s1:#141619;--s2:#1c1f23;--s3:#24282d;--line:#2a2e34;--line2:#353a41;--tx:#f2f0eb;--mu:#a4aab3;--fa:#7a808a;
 --ac:#ffb224;--ac2:#ffc65c;--acbg:#ffb2241a;--ok:#34d399;--okbg:#34d3991a;--bad:#ff5d55;--badbg:#ff5d551a;--info:#6aa9ff;--r:18px;--r2:12px;
 --sh:0 1px 0 #ffffff08 inset,0 8px 24px -12px #000c}
 *{box-sizing:border-box}
@@ -67,8 +67,16 @@ header h1:before{content:"";width:10px;height:10px;border-radius:3px;background:
 .seg button.on{background:var(--s3);color:var(--tx);box-shadow:0 1px 0 #ffffff10 inset}
 .tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:16px 0 12px;padding:4px;background:var(--s1);border:1px solid var(--line);border-radius:99px;position:sticky;top:8px;z-index:4;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .tabs::-webkit-scrollbar{display:none}
-.tabs button{border:0;background:transparent;color:var(--mu);padding:9px 15px;border-radius:99px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s}
+.tabs button{border:0;background:transparent;color:var(--mu);padding:9px 12px;border-radius:99px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s}
 .tabs button:hover{color:var(--tx)}
+.tabs.fadeR{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+.tabs.fadeL{-webkit-mask-image:linear-gradient(90deg,transparent,#000 15%);mask-image:linear-gradient(90deg,transparent,#000 15%)}
+.tabs.fadeL.fadeR{-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.grow{min-width:0}.wrapany{overflow-wrap:anywhere;word-break:break-word}
+.two{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.skel{height:68px;border-radius:12px;margin:10px 0;background:linear-gradient(90deg,var(--s2) 25%,var(--s3) 50%,var(--s2) 75%);background-size:200% 100%;animation:skel 1.2s linear infinite}
+@keyframes skel{to{background-position:-200% 0}}
+input[type=time]{min-width:150px}
 .tabs button.on{background:var(--tx);color:var(--bg)}
 .sw{position:relative;width:46px;height:28px;flex:none}.sw input{opacity:0;width:0;height:0}
 .sw span{position:absolute;inset:0;background:var(--s3);border:1px solid var(--line2);border-radius:99px;transition:.2s;cursor:pointer}
@@ -181,13 +189,15 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
       </div>
       <div class="card now" id="nowCard">
         <div class="row"><div class="mu grow" id="wJob" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No active print</div><span class="chip" id="wWatch" title="Spaghetti watch">-</span></div>
-        <div class="row" style="align-items:flex-end;margin-top:6px"><div class="big num grow" id="wPct">--%</div>
+        <div class="row hide" id="wIdle" style="margin-top:10px;gap:10px"><div class="grow"><div style="font-size:22px;font-weight:650">Ready</div><div class="mu sm num" id="wIdleT"></div></div>
+          <button class="btn pri ro-hide" id="wStartP">Start a print</button></div>
+        <div id="wBig"><div class="row" style="align-items:flex-end;margin-top:6px"><div class="big num grow" id="wPct">--%</div>
           <div style="text-align:right;padding-bottom:6px"><div class="num" id="wRem" style="font-size:20px;font-weight:600">--</div><div class="mu sm" id="wEta">remaining</div></div></div>
         <div class="bar" style="margin-top:12px"><i id="wBar"></i></div>
         <div class="stats"><div class="stat"><span class="mu sm">Layer</span><b class="num" id="wLayer">--</b></div>
           <div class="stat"><span class="mu sm">Nozzle</span><b class="num" id="wNoz">--</b></div>
-          <div class="stat"><span class="mu sm">Bed</span><b class="num" id="wBed">--</b></div></div>
-        <div class="row ro-hide" style="margin-top:14px"><button class="btn pri grow" id="wPause" style="flex:2"></button><button class="btn bad grow" id="wStop"></button></div>
+          <div class="stat"><span class="mu sm">Bed</span><b class="num" id="wBed">--</b></div></div></div>
+        <div class="row ro-hide" id="wCtl" style="margin-top:14px"><button class="btn pri grow" id="wPause" style="flex:2"></button><button class="btn bad grow" id="wStop"></button></div>
         <div class="row ro-hide hide" id="wNextRow" style="margin-top:10px"><button class="btn go grow" id="wNext"></button></div>
         <div class="mu sm hide" id="wPub" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)"></div>
       </div>
@@ -357,7 +367,7 @@ void main(){
     playBtn.onclick = () => {
       if (playing) return stop();
       if (top >= d.layers) top = 0;
-      playBtn.textContent = "❚❚";
+      playBtn.textContent = "||";
       const step = Math.max(1, Math.round(d.layers / 150));
       playing = setInterval(() => { top = Math.min(d.layers, top + step); slider.value = top; setLab(); dirty = true; if (top >= d.layers) stop(); }, 40);
     };
@@ -723,7 +733,7 @@ function bedServo(b) { window._bc = b;
   if (!b || !b.enabled) { ban.classList.add("hide"); return; }
   const msg = b.fault ? "Bed servo FAULT (heating held off): " + b.fault : b.alert && b.bed_target > 0 ? "Bed heating off: " + b.alert : "";
   ban.textContent = msg; ban.classList.toggle("hide", !msg);
-  $("#fsStats").textContent += ` · Bed servo ${b.fault ? "FAULT" : b.state === "close" ? "🔥 heating" : "🧊 off"}${b.uno ? "" : " (Uno no reply)"}`;
+  $("#fsStats").textContent += ` · Bed servo ${b.fault ? "FAULT" : b.state === "close" ? "heater on" : "heater off"}${b.uno ? "" : " (Uno no reply)"}`;
 }
 
 // ------------------------------------------------------------ tabs
@@ -746,7 +756,14 @@ function compose(...parts) {
 const printing = () => status && active(status.printer.state);
 // Print: what's printing and what's next · Control: move, heat, speed · AMS: filament and spools · Safety: spaghetti and plate
 // History: past prints, timelapses, stats · Settings: how PrintView behaves · Info: what the printer reports
-const TABS = [["printtab", "Print"], ["control", "Move & heat"], ["amstab", "Filament"], ["safety", "Fail detection"], ["historytab", "Past prints"], ["settingstab", "Settings"], ["printer", "Printer info"]];
+const TABS = [["printtab", "Print"], ["control", "Move & heat"], ["amstab", "Filament"], ["safety", "Fail detection"], ["historytab", "Past prints"], ["more", "More"]];
+// fade the edge of the tab bar when more tabs are hidden off to the side
+function tabFade() {
+  const t = $("#tabs"); if (!t) return;
+  const f = () => { t.classList.toggle("fadeR", t.scrollLeft + t.clientWidth < t.scrollWidth - 4); t.classList.toggle("fadeL", t.scrollLeft > 4); };
+  if (!t.dataset.fade) { t.dataset.fade = 1; t.addEventListener("scroll", f, {passive: true}); window.addEventListener("resize", f); }
+  f();
+}
 // one plain sentence under the tabs saying what the open tab is for
 const TAB_HELP = {
   printtab: "Start a print from the SD card, schedule one for later, or line prints up in the queue.",
@@ -756,14 +773,23 @@ const TAB_HELP = {
   historytab: "Every finished print with its photo, timelapse videos, and stats.",
   settingstab: "Printer name, quiet hours, what happens when a print ends, and the Pi's fan.",
   printer: "What the printer and the Pi report: temperatures, firmware, and a log of what happened.",
+  more: "Settings, printer and Pi info, and (with the master code) the owner controls.",
   admin: "Owner only: who's logged in, kick people, change the code, freeze controls.",
   piadmin: "Only on the Pi itself: update and restart PrintView."
 };
 const RO_TABS = TABS;      // the public sees every tab (read-only); only Owner needs the master code
-function tabList() {
-  if (window.PV_ADMIN) return TABS.concat([["admin", "Owner"], ["piadmin", "Pi admin"]]);
-  return readOnly ? RO_TABS : role === "master" ? TABS.concat([["admin", "Owner"]]) : TABS;
-}
+function tabList() { return readOnly ? RO_TABS : TABS; }
+// "More": Settings, Printer info, and the owner pages, behind a small switcher
+VIEWS.more = {
+  build(el) {
+    const parts = [["Settings", "settingstab"], ["Printer info", "printer"]];
+    if (window.PV_ADMIN || (role === "master" && !readOnly)) parts.push(["Owner", "admin"]);
+    if (window.PV_ADMIN) parts.push(["Pi admin", "piadmin"]);
+    this.v = subtabs("more", parts.map(([n, k]) => [n, VIEWS[k]]));
+    this.v.build(el);
+  },
+  update(s) { if (this.v) this.v.update(s); }
+};
 function renderTabs() {
   const tabs = tabList();
   $("#tabs").innerHTML = tabs.map(([k, n]) => `<button data-k="${k}" class="${k === tab ? "on" : ""}"${k === "admin" ? ' style="color:var(--ac)"' : ""}>${n}</button>`).join("");
@@ -772,6 +798,7 @@ function renderTabs() {
   if (!help) { help = document.createElement("div"); help.id = "tabHelp"; help.className = "mu sm"; help.style.cssText = "margin:10px 4px 2px"; $("#tabs").after(help); }
   help.textContent = TAB_HELP[tab] || "";
   const on = $("#tabs").querySelector("button.on"); if (on && on.scrollIntoView) on.scrollIntoView({block: "nearest", inline: "nearest"});
+  tabFade();
   const v = VIEWS[tab];
   $("#views").innerHTML = "";
   const el = document.createElement("div");
@@ -788,7 +815,8 @@ const NOW = {
   },
   update(s) {
     const p = s.printer, d = s.detector || {}, act = active(p.state);
-    $("#wJob").textContent = p.job || (act ? "Print" : "No active print");
+    const idleNow = !act && !["FINISH", "FAILED"].includes(p.state);
+    $("#wJob").textContent = idleNow ? (p.job ? "Last print: " + p.job : "No active print") : p.job || (act ? "Print" : "No active print");
     $("#wJob").style.color = p.job || act ? "var(--tx)" : "";
     const has = p.percent != null && p.state !== "IDLE";
     $("#wPct").textContent = has ? p.percent + "%" : "--%";
@@ -800,13 +828,19 @@ const NOW = {
       : act && p.remaining_min > 0 ? "Done at " + new Date(Date.now() + p.remaining_min * 60000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) : "remaining";
     $("#wLayer").textContent = p.layer != null && p.total_layers ? p.layer + " / " + p.total_layers : "--";
     $("#wNoz").textContent = deg(p.nozzle, p.nozzle_target);
-    $("#wBed").textContent = deg(p.bed, p.bed_target) + (window._bc && window._bc.enabled ? (window._bc.state === "close" ? " 🔥" : " 🧊") : "");
+    $("#wBed").textContent = deg(p.bed, p.bed_target) + (window._bc && window._bc.enabled ? (window._bc.state === "close" ? " · heater on" : "") : "");
     const pb = $("#wPause"), paused = p.state === "PAUSE";
     pb.className = "btn grow " + (paused ? "go" : "pri");
     pb.innerHTML = paused ? IC.play + "Resume" : IC.pause + "Pause";
     pb.disabled = !p.connected || !(paused || p.state === "RUNNING");
     pb.onclick = () => cmd(paused ? "resume" : "pause", null, paused ? "Resuming..." : "Pausing...");
     $("#wStop").disabled = !(p.connected && act);
+    const idle = !act && !["FINISH", "FAILED"].includes(p.state);
+    $("#wIdle").classList.toggle("hide", !idle);
+    $("#wBig").classList.toggle("hide", idle);
+    $("#wCtl").classList.toggle("hide", !(p.connected && act));
+    if (idle) $("#wIdleT").textContent = p.connected ? "Nozzle " + deg(p.nozzle, p.nozzle_target) + " · Bed " + deg(p.bed, p.bed_target) : "Printer offline";
+    $("#wStartP").onclick = () => { tab = "printtab"; renderTabs(); const l = $("#pList"); if (l) l.scrollIntoView({behavior: "smooth", block: "start"}); };
     const q = s.queue || {}, free = p.connected && ["IDLE", "FINISH", "FAILED"].includes(p.state);
     $("#wNextRow").classList.toggle("hide", !(q.next && free && !readOnly));
     if (q.next) {
@@ -828,8 +862,8 @@ async function pubStats() {
     const el = $("#wPub");
     if (!j.enabled || !j.all.prints) { el.classList.add("hide"); return; }
     const m = j.month, a = j.all, kg = g => g >= 1000 ? (g / 1000).toFixed(1) + " kg" : Math.round(g) + " g";
-    el.innerHTML = `<b style="color:var(--tx)">This month</b> ${m.prints} prints · ${m.hours} h · ${m.success_pct == null ? "-" : m.success_pct + "%"} success · ${kg(m.grams)}<br>`
-      + `<b style="color:var(--tx)">All time</b> ${a.prints} prints · ${a.hours} h · ${a.success_pct == null ? "-" : a.success_pct + "%"} success · ${kg(a.grams)}`;
+    const ln = (t, x) => `<b style="color:var(--tx)">${t}</b> ${x.prints} prints · ${x.hours} h · ${x.success_pct == null ? "-" : x.success_pct + "%"} success${x.grams > 0 ? " · " + kg(x.grams) : ""}`;
+    el.innerHTML = m.prints === a.prints ? ln("So far", a) : ln("This month", m) + "<br>" + ln("All time", a);
     el.classList.remove("hide");
   } catch (e) {}
 }
@@ -934,12 +968,13 @@ const CTL = {
       <div class="mu sm" style="margin-top:8px">Drying can only be started from the printer's screen.</div></div>`,
   move: `<div class="card ro-hide"><div class="h">Move</div>
       <div class="mu sm" id="cMoveLock" style="margin-bottom:10px"></div>
-      <div class="row w" style="gap:18px;align-items:flex-start">
-        <div class="pad">${["", "Y+", "", "X-", "home", "X+", "", "Y-", ""].map(k => k ? `<button class="btn" data-jog="${k}">${k === "home" ? "⌂" : k}</button>` : "<span></span>").join("")}</div>
-        <div style="display:grid;gap:6px"><button class="btn" data-jog="Z-" style="min-width:80px">Bed ↑</button><button class="btn" data-jog="Z+">Bed ↓</button></div>
-        <div style="display:grid;gap:6px"><div class="mu sm">Step (mm)</div><div class="seg" id="cStep"><button data-v="1">1</button><button data-v="10">10</button><button data-v="50">50</button></div>
-          <button class="btn sm" id="cMotors">Motors off</button>
-          <div class="row"><button class="btn sm" data-ex="10">Extrude 10</button><button class="btn sm" data-ex="-10">Retract 10</button></div></div></div></div>`,
+      <div class="row w" style="gap:16px;align-items:stretch">
+        <div><div class="mu sm" style="margin-bottom:6px">Print head (X / Y)</div>
+          <div class="pad">${["", "Y+", "", "X-", "home", "X+", "", "Y-", ""].map(k => k ? `<button class="btn" data-jog="${k}"${k === "home" ? ' style="font-size:13px"' : ""}>${k === "home" ? "Home" : k}</button>` : "<span></span>").join("")}</div></div>
+        <div style="display:flex;flex-direction:column"><div class="mu sm" style="margin-bottom:6px">Bed (Z)</div>
+          <button class="btn grow" data-jog="Z-" style="min-width:96px">Bed up</button><button class="btn grow" data-jog="Z+" style="margin-top:6px">Bed down</button></div></div>
+      <div class="row" style="margin-top:12px;gap:10px"><span class="mu sm">Step</span><div class="seg grow" id="cStep" style="max-width:260px"><button data-v="1">1 mm</button><button data-v="10">10 mm</button><button data-v="50">50 mm</button></div></div>
+      <div class="row w" style="margin-top:12px;gap:6px"><button class="btn sm" data-ex="10">Extrude 10 mm</button><button class="btn sm" data-ex="-10">Retract 10 mm</button><button class="btn sm bad" id="cMotors">Motors off</button></div></div>`,
   gcode: `<div class="card ro-hide"><div class="h">G-code console</div><textarea id="cG" placeholder="M105"></textarea>
       <div class="row" style="margin-top:8px"><span class="mu sm grow">Moves are refused while printing.</span><button class="btn sm pri" id="cGo">Send</button></div></div>`,
   options: `<div class="card"><div class="h">Printer options</div>
@@ -991,9 +1026,9 @@ VIEWS.controls = {
       if (k === "home") return cmd("home", null, "Homing...");
       busy = false; cmd("jog", {axis: k[0], mm: (k[1] === "-" ? -1 : 1) * jogStep}, k[0] + " " + k[1] + jogStep + " mm");
     });
-    if ($("#cMotors")) $("#cMotors").onclick = () => cmd("motors_off", null, "Motors off");
+    if ($("#cMotors")) $("#cMotors").onclick = () => confirmBox("Turn the motors off?", "The print head and bed can then be moved by hand, and the printer forgets where they are (it homes again before the next move).", "Motors off", () => cmd("motors_off", null, "Motors off"), true);
     el.querySelectorAll("[data-ex]").forEach(b => b.onclick = () => cmd("extrude", {mm: +b.dataset.ex}, b.textContent));
-    if ($("#cGo")) $("#cGo").onclick = () => { const g = $("#cG").value.trim(); if (g) cmd("gcode", {gcode: g}, "G-code sent"); };
+    if ($("#cGo")) $("#cGo").onclick = () => { const g = $("#cG").value.trim(); if (g) confirmBox("Send this G-code?", g.split("\n").slice(0, 8).join("\n") + (g.split("\n").length > 8 ? "\n..." : "") + "\n\nThe printer runs it straight away.", "Send", () => cmd("gcode", {gcode: g}, "G-code sent")); };
     el.querySelectorAll("[data-opt]").forEach(c => c.onchange = () => cmd("option", {name: c.dataset.opt, value: c.checked}, "Option saved"));
     if ($("#cCal")) $("#cCal").onclick = () => {
       const bed = $("#cbBed").checked, vibration = $("#cbVib").checked, motor = $("#cbMot").checked;
@@ -1055,7 +1090,7 @@ VIEWS.controls = {
     const err = p.print_error ? (p.print_error >>> 0).toString(16).toUpperCase().padStart(8, "0") : "";
     if ($("#cInfo")) {
       const kv = [
-        ["Stage", esc(p.stage || "-") + (dv.prepare_pct != null ? " (file " + dv.prepare_pct + "%)" : "")],
+        ["Stage", active(p.state) ? esc(p.stage || "-") + (dv.prepare_pct != null ? " (file " + dv.prepare_pct + "%)" : "") : ({FINISH: "Finished", FAILED: "Stopped", IDLE: "Idle"}[p.state] || "Idle")],
         ["Speed", esc(p.speed_name || "-") + (p.speed_pct ? " (" + p.speed_pct + "%)" : "")],
         dv.gcode_line ? ["G-code line", dv.gcode_line.toLocaleString()] : null,
         ["AMS", esc(dv.ams_step || "-")],
@@ -1114,10 +1149,10 @@ async function paDialog(t) {
     const rows = (r.entries || []).filter(e => !t.idx || e.filament_id === t.idx);
     $("#pList").innerHTML = rows.length ? rows.map(e => `<div><div class="grow"><div style="font-weight:600${e.cali_idx === t.cali_idx ? ";color:var(--ac)" : ""}">${esc(e.name)}</div>
         <div class="fa sm">K ${e.k.toFixed(3)}${e.cali_idx === t.cali_idx ? " · in use" : ""}</div></div>
-        <button class="btn sm" data-puse="${e.cali_idx}" data-pf="${esc(e.filament_id)}">Use</button><button class="btn sm bad" data-pdel="${e.cali_idx}" data-pf="${esc(e.filament_id)}">✕</button></div>`).join("")
+        <button class="btn sm" data-puse="${e.cali_idx}" data-pf="${esc(e.filament_id)}">Use</button><button class="btn sm bad" data-pdel="${e.cali_idx}" data-pf="${esc(e.filament_id)}">Delete</button></div>`).join("")
       : '<div class="mu sm">None saved for this material yet.</div>';
     $("#pList").querySelectorAll("[data-puse]").forEach(b => b.onclick = () => send({action: "select", slot: t.slot, cali_idx: +b.dataset.puse, filament_id: b.dataset.pf}, "Slot updated"));
-    $("#pList").querySelectorAll("[data-pdel]").forEach(b => b.onclick = () => send({action: "delete", cali_idx: +b.dataset.pdel, filament_id: b.dataset.pf}, "Deleted"));
+    $("#pList").querySelectorAll("[data-pdel]").forEach(b => b.onclick = () => confirmBox("Delete this K value?", "It's removed from the printer's saved list.", "Delete", () => send({action: "delete", cali_idx: +b.dataset.pdel, filament_id: b.dataset.pf}, "Deleted"), true));
   } catch (e) { $("#pList").innerHTML = `<div style="color:var(--bad)" class="sm">${esc(e.message)}</div>`; }
 }
 function editSlot(t) {
@@ -1272,31 +1307,34 @@ VIEWS.print = {
   build(el) {
     el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm" id="pRef">Refresh</button></div>
       <div class="mu sm" id="pUpMsg" style="margin-top:6px"></div>
-      <div class="list" id="pList" style="margin-top:10px"><div class="mu">Loading...</div></div>
+      <div class="row" style="margin-top:10px;gap:6px"><input type="text" id="pQ" class="grow" placeholder="Search files"><select id="pSort"><option value="new">Newest</option><option value="old">Oldest</option><option value="az">Name A-Z</option><option value="big">Biggest</option></select></div>
+      <div class="list" id="pList" style="margin-top:10px"><div class="skel"></div><div class="skel"></div></div>
       <div id="pSchedList" style="margin-top:12px"></div>
       <details style="margin-top:12px"><summary class="mu sm" style="cursor:pointer">Recently deleted (kept on the Pi)</summary><div class="list" id="pTrash" style="margin-top:8px"></div></details></div><div id="pDetail"></div>`;
     $("#pRef").onclick = () => this.load(true);
+    $("#pQ").oninput = () => this.draw();
+    $("#pSort").onchange = () => this.draw();
     $("#pUp").onclick = () => pwUpload(BASE + "/api/upload", {"X-PW": "1"}, () => this.load(true), $("#pUpMsg"));
     this.load(false);
   },
+  draw() {
+    const all = this.files || [], q = ($("#pQ").value || "").trim().toLowerCase(), so = $("#pSort").value;
+    let files = all.filter(f => !q || f.title.toLowerCase().includes(q));
+    files = files.slice().sort((a, b) => so === "old" ? b.order - a.order : so === "az" ? a.title.localeCompare(b.title) : so === "big" ? b.size - a.size : a.order - b.order);
+    $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=1&path=${encodeURIComponent(f.path)}" onerror="this.style.visibility='hidden'"><div class="grow" style="min-width:0"><div class="two" style="font-weight:600" title="${esc(f.title)}">${esc(f.title)}</div>
+        <div class="fa sm">${esc(f.date || "")} · ${(f.size / 1e6).toFixed(1)} MB</div></div>
+        <a class="btn sm icon ro-ok" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download title="Download" aria-label="Download">${IC.dl}</a><span class="fa" style="padding-left:6px">›</span></div>`).join("")
+      : `<div class="mu">${all.length ? "No file matches \"" + esc(q) + "\"." : "No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer."}</div>`;
+    $("#pList").querySelectorAll("[data-i]").forEach(r => r.onclick = () => this.open(files[+r.dataset.i]));
+    $("#pList").querySelectorAll("[data-dl]").forEach(a => a.onclick = e => e.stopPropagation());
+  },
   async load(refresh) {
-    $("#pList").innerHTML = '<div class="mu">Loading...</div>';
+    $("#pList").innerHTML = '<div class="skel"></div><div class="skel"></div>';
     try {
       const j = await api("/api/files" + (refresh ? "?refresh=1" : ""));
       const files = Array.isArray(j) ? j : j.list || [];
-      $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=1&path=${encodeURIComponent(f.path)}" onerror="this.style.visibility='hidden'"><div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(f.title)}">${esc(f.title)}</div>
-        <div class="fa sm">${esc(f.date || "")} · ${(f.size / 1e6).toFixed(1)} MB</div></div>
-        <a class="btn sm icon ro-ok" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download title="Download" aria-label="Download">${IC.dl}</a>
-        <button class="btn sm bad icon" data-del="${i}" title="Delete" aria-label="Delete">${IC.trash}</button><span class="fa">›</span></div>`).join("") : '<div class="mu">No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer.</div>';
-      $("#pList").querySelectorAll("[data-i]").forEach(r => r.onclick = () => this.open(files[+r.dataset.i]));
-      $("#pList").querySelectorAll("[data-dl]").forEach(a => a.onclick = e => e.stopPropagation());
-      $("#pList").querySelectorAll("[data-del]").forEach(b => b.onclick = e => {
-        e.stopPropagation();
-        const f = files[+b.dataset.del];
-        confirmBox("Delete " + f.title + "?", "It's removed from the printer's SD card. This can't be undone.", "Delete", async () => {
-          try { await api("/api/files/delete", {path: f.path}); toast("Deleted"); this.load(true); } catch (err) { toast(err.message); }
-        }, true);
-      });
+      this.files = files.map((f, i) => Object.assign({}, f, {order: i}));
+      this.draw();
     } catch (e) { $("#pList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
     try {
       const sj = ((await api("/api/schedule")).items || []).filter(x => x.status === "waiting" || Date.now() / 1000 - (x.done || x.at) < 86400);
@@ -1349,7 +1387,8 @@ VIEWS.print = {
           <label class="ck"><input type="checkbox" id="oVib" checked>Vibration calibration</label><label class="ck"><input type="checkbox" id="oTl">Timelapse</label>
           <div class="row" style="margin-top:8px"><span class="grow">Speed</span><select id="oSpd"><option value="1">Silent</option><option value="2" selected>Standard</option><option value="3">Sport</option><option value="4">Ludicrous</option></select></div>
           <div class="row" style="margin-top:12px"><button class="btn pri grow" id="pStart">Start print</button><button class="btn grow" id="pQueue">Add to queue</button></div>
-          <div class="sched" id="pSchedBox"></div></div>`;
+          <div class="sched" id="pSchedBox"></div>
+          <div class="div"></div><button class="btn sm bad ro-hide" id="pDel">Delete this file from the SD card</button></div>`;
         load3d(f, plate);
         if (plates.length > 1) { paintSeg("#pPl", plate.index); box.querySelectorAll("#pPl button").forEach(b => b.onclick = () => { plate = plates.find(p => p.index === +b.dataset.v); draw(); }); }
         fil.forEach(fl => { box.querySelector(`[data-fid="${fl.id}"]`).value = best(fl); });
@@ -1362,6 +1401,9 @@ VIEWS.print = {
           return {path: f.path, plate: plate.index, use_ams: !useExt, ams_mapping: useExt ? [] : arr, timelapse: $("#oTl").checked,
             bed_leveling: $("#oLvl").checked, flow_cali: false, vibration_cali: $("#oVib").checked, speed: +$("#oSpd").value};
         };
+        $("#pDel").onclick = () => confirmBox("Delete " + f.title + "?", "It's removed from the printer's SD card. A copy stays on the Pi under Recently deleted.", "Delete", async () => {
+          try { await api("/api/files/delete", {path: f.path}); toast("Deleted"); box.innerHTML = ""; VIEWS.print.load(true); } catch (err) { toast(err.message); }
+        }, true);
         schedPicker($("#pSchedBox"), at => {
           confirmBox("Schedule this print?", f.title + "\nStarts " + fmtWhen(at) + "\nMake sure the plate is clear before then.", "Schedule", async () => {
             try { await api("/api/schedule", Object.assign(mkBody(), {at})); toast("Scheduled for " + fmtWhen(at)); VIEWS.print.load(false); } catch (e) { toast(e.message); }
@@ -1449,8 +1491,8 @@ function schedPicker(box, onPick) {
 // ---------- Print history (final photo of every print) + weekly report
 VIEWS.history = {
   build(el) {
-    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Last 7 days</div><button class="btn sm" id="hSend">Send to phone</button></div><div id="hRep" class="mu sm" style="margin-top:8px">Loading...</div></div>
-      <div class="card"><div class="h">Print history</div><div id="hList"><div class="mu">Loading...</div></div></div>`;
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Last 7 days</div><button class="btn sm" id="hSend">Send to phone</button></div><div id="hRep" class="mu sm" style="margin-top:8px"><div class="skel" style="height:34px"></div></div></div>
+      <div class="card"><div class="h">Print history</div><div id="hList"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>`;
     $("#hSend").onclick = async () => { try { await api("/api/report/send", {}); toast("Report sent"); } catch (e) { toast(e.message); } };
     this.load();
   },
@@ -1461,7 +1503,7 @@ VIEWS.history = {
       const it = (await api("/api/history")).items || [];
       $("#hList").innerHTML = it.length ? it.map(x => `<div class="row" style="gap:12px;margin:10px 0;align-items:flex-start">
         ${x.photo ? `<img src="${BASE}/api/history/photo/${x.photo}" loading="lazy" style="width:120px;border-radius:10px">` : '<div style="width:120px;height:68px;border-radius:10px;background:var(--s2)"></div>'}
-        <div class="grow"><b>${esc(x.job)}</b><div class="fa sm">${new Date(x.end * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})} · ${mins(x.minutes)}${x.layers ? " · " + x.layers + " layers" : ""}</div>
+        <div class="grow"><b class="wrapany">${esc(x.job)}</b><div class="fa sm">${new Date(x.end * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})} · ${mins(x.minutes)}${x.layers ? " · " + x.layers + " layers" : ""}</div>
         <div class="sm" style="color:${x.result === "done" ? "var(--ok)" : "var(--bad)"}">${x.result === "done" ? "Finished" : "Failed at " + (x.percent ?? "?") + "%" + (x.cause ? ": " + esc(x.cause) : "")}</div>
         ${x.grams ? `<div class="fa sm">${Math.round(x.grams)} g · ${x.meters} m${x.cost != null ? " · " + esc(this.cur) + x.cost.toFixed(2) : ""}${(x.filaments || []).length > 1 ? " (" + x.filaments.map(f => esc(f.type) + " " + Math.round(f.g) + " g").join(", ") + ")" : ""}</div>` : ""}
         ${x.est_minutes && x.result === "done" ? `<div class="fa sm">Estimated ${mins(x.est_minutes)}, took ${mins(x.print_minutes ?? x.minutes)}${x.paused_minutes ? " (+" + mins(x.paused_minutes) + " paused)" : ""}</div>` : ""}
@@ -1638,10 +1680,10 @@ const FLOW = [["p1s", "Pi ↔ P1S (MQTT)"], ["uno", "Pi ↔ Arduino (bed relay)"
 VIEWS.flow = {
   seq: 0, lines: {p1s: [], uno: [], web: []}, paused: false, timer: null, hide: {}, filter: "",
   build(el) {
-    el.innerHTML = `<div class="card"><div class="h">Data flow</div><div class="row"><div class="grow mu sm">Live traffic through the Pi, newest at the bottom. <span style="color:var(--ok)">Green</span> = into the Pi, <span style="color:var(--ac)">amber</span> = out of the Pi.</div></div>
+    el.innerHTML = `<details class="card" id="flDet"><summary style="cursor:pointer;font-weight:650">Advanced: raw data from the printer, Arduino and web</summary><div style="margin-top:12px"><div class="h">Data flow</div><div class="row"><div class="grow mu sm">Live traffic through the Pi, newest at the bottom. <span style="color:var(--ok)">Green</span> = into the Pi, <span style="color:var(--ac)">amber</span> = out of the Pi.</div></div>
       <div class="row" style="margin-top:10px;gap:6px"><input id="flF" placeholder="Filter (e.g. gcode_state, ams, temp)" class="grow"><button class="btn sm" id="flP">Pause</button><button class="btn sm" id="flC">Clear</button></div></div>
       ${FLOW.map(([k, t]) => `<div class="card"><div class="row" style="cursor:pointer" data-fh="${k}"><div class="h grow" style="margin:0">${t}</div><span class="chip" id="flN-${k}">0</span></div>
-        <pre id="flB-${k}" class="flow"></pre></div>`).join("")}`;
+        <pre id="flB-${k}" class="flow"></pre></div>`).join("")}</div></details>`;
     $("#flP").onclick = () => { this.paused = !this.paused; $("#flP").textContent = this.paused ? "Resume" : "Pause"; if (!this.paused) this.paint(); };
     $("#flC").onclick = () => { for (const k in this.lines) this.lines[k] = []; this.paint(); };
     $("#flF").value = this.filter;
@@ -1722,7 +1764,7 @@ VIEWS.statsv = {
         <div><span class="mu sm">Prints</span><b>${j.prints}</b><span class="fa sm">${j.done} done · ${j.failed} failed</span></div>
         <div><span class="mu sm">Success rate</span><b style="color:${j.success_pct >= 80 ? "var(--ok)" : j.success_pct >= 50 ? "var(--ac)" : "var(--bad)"}">${j.success_pct}%</b></div>
         <div><span class="mu sm">Hours printed</span><b>${j.hours}</b></div>
-        <div><span class="mu sm">Filament</span><b>${kg(j.grams)}</b><span class="fa sm">${j.meters} m</span></div>
+        <div><span class="mu sm">Filament</span><b>${j.grams > 0 ? kg(j.grams) : "-"}</b><span class="fa sm">${j.grams > 0 ? j.meters + " m" : "Counted from prints after the update"}</span></div>
         <div><span class="mu sm">Cost</span><b>${money(j.cost)}</b></div></div>`;
       if (j.months.length) h += `<div class="div"></div><div class="h">By month</div><table class="tbl"><tr><th>Month</th><th class="n">Prints</th><th class="n">Success</th><th class="n">Hours</th><th class="n">Filament</th><th class="n">Cost</th></tr>`
         + j.months.map(m => `<tr><td>${new Date(m.month + "-15").toLocaleDateString([], {month: "short", year: "numeric"})}</td><td class="n">${m.prints}</td><td class="n">${Math.round(m.done * 100 / m.prints)}%</td><td class="n">${m.hours}</td><td class="n">${kg(m.grams)}</td><td class="n">${m.cost ? c + m.cost.toFixed(2) : "-"}</td></tr>`).join("") + "</table>";
@@ -1745,7 +1787,7 @@ VIEWS.spools = {
       <div class="mu sm" style="margin-bottom:10px">Bambu spools with a tag report what's left by themselves (turn on "Estimate remaining filament" below). For other spools, type the grams on the spool once; each print takes off what it used. Before a print starts you're warned if a spool won't last.</div>
       <div id="spList"><div class="mu sm">Loading...</div></div>
       <div class="div"></div><div class="row"><div class="h grow" style="margin:0">Price per kg</div><span class="mu sm">Currency</span><input type="text" id="spCur" maxlength="3" style="width:56px;margin-left:8px"></div>
-      <div class="mu sm" style="margin:6px 0 10px">Used for the cost of each print. A type not listed uses its base type (PLA Matte uses PLA).</div>
+      <div class="mu sm" style="margin:6px 0 10px">Used for the cost of each print. Shown: the types loaded now. A type not listed uses its base type (PLA Matte uses PLA).</div>
       <div id="spPrices" class="kv2"></div>
       <div class="row ro-hide" style="margin-top:10px;gap:6px"><input type="text" id="spNewT" placeholder="Type, like PA6-CF" style="width:150px"><input type="number" id="spNewP" placeholder="Price" style="width:90px" min="0" step="0.01"><button class="btn sm" id="spAdd">Add</button></div></div>`;
     $("#spAdd").onclick = async () => {
@@ -1776,8 +1818,12 @@ VIEWS.spools = {
         if (v === "") return toast("Type the grams on the spool (a full 1 kg spool is 1000)");
         try { await api("/api/spools/set", {slot: +b.dataset.spset, grams: +v}); toast("Saved"); this.load(); } catch (e) { toast(e.message); }
       });
-      $("#spPrices").innerHTML = Object.entries(j.prices || {}).sort().map(([t, v]) => `<div><span class="mu sm">${esc(t)}</span>
-        <div class="row" style="gap:4px;margin-top:4px"><span>${esc(c)}</span><input type="number" min="0" step="0.01" value="${v}" data-pr="${esc(t)}" style="width:100%" ${readOnly ? "disabled" : ""}></div></div>`).join("");
+      const inUse = new Set(rows.map(r => (r.type || "").toUpperCase()).concat(rows.map(r => (r.type || "").toUpperCase().split(/[- ]/)[0])));
+      const cell = ([t, v]) => `<div><span class="mu sm">${esc(t)}</span>
+        <div class="row" style="gap:4px;margin-top:4px"><span>${esc(c)}</span><input type="number" min="0" step="0.01" value="${v}" data-pr="${esc(t)}" style="width:100%" ${readOnly ? "disabled" : ""}></div></div>`;
+      const all = Object.entries(j.prices || {}).sort(), used = all.filter(([t]) => inUse.has(t)), rest = all.filter(([t]) => !inUse.has(t));
+      $("#spPrices").innerHTML = (used.length ? used.map(cell).join("") : '<div class="mu sm">No loaded spool has a price yet.</div>')
+        + (rest.length ? `<details style="grid-column:1/-1"><summary class="mu sm" style="cursor:pointer">Other filament types (${rest.length})</summary><div class="kv2" style="margin-top:8px">${rest.map(cell).join("")}</div></details>` : "");
       $("#spPrices").querySelectorAll("[data-pr]").forEach(i => i.onchange = () => setting({prices: {[i.dataset.pr]: i.value === "" ? null : +i.value}}, "Price saved"));
     } catch (e) { $("#spList").innerHTML = `<div style="color:var(--bad)" class="sm">${esc(e.message)}</div>`; }
   }
@@ -1792,7 +1838,7 @@ VIEWS.prefs = {
         <input type="text" id="sfName" maxlength="40" placeholder="PrintView" style="width:180px"></div></div>
       <div class="card"><div class="row"><div class="h grow" style="margin:0">Quiet hours</div><span class="chip hide" id="sfQNow" style="color:var(--ac)">On now</span></div>
       ${sw("sfQuiet", "Use quiet hours", "A running print switches to Silent speed during these hours, and back after")}
-      <div class="row" style="gap:8px;margin:4px 0 6px"><span class="mu sm">From</span><input type="time" id="sfQs"><span class="mu sm">to</span><input type="time" id="sfQe"></div>
+      <div class="row w" style="gap:8px;margin:4px 0 6px"><span class="mu sm">From</span><input type="time" id="sfQs" style="width:170px"><span class="mu sm">to</span><input type="time" id="sfQe" style="width:170px"></div>
       ${sw("sfQLight", "Also turn the chamber light off", "The camera can't see in the dark, so spaghetti detection can't work while it's off")}</div>
       <div class="card"><div class="h">When a print ends</div>
       ${sw("sfCool", "Turn the heaters off", "Makes sure the nozzle and bed are off")}
@@ -1918,7 +1964,7 @@ function subtabs(key, parts) {
       const box = el.lastElementChild;
       this.child = (parts.find(p => p[0] === cur) || parts[0])[1];
       this.child.build(box);
-      el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { subSel[key] = b.dataset.v; renderTabs(); });
+      el.firstElementChild.querySelectorAll("button").forEach(b => b.onclick = () => { subSel[key] = b.dataset.v; renderTabs(); });
     },
     update(s) { if (this.child && this.child.update) this.child.update(s); }
   };
@@ -1953,6 +1999,9 @@ VIEWS.admin = {
       <div class="row w" id="exSet"><span class="sm">Hours</span><input type="number" id="exH" value="24" min="0.05" max="48" step="0.5" style="width:80px">
         <span class="sm">Speed mm/s</span><input type="number" id="exS" value="100" min="20" max="500" step="10" style="width:80px"></div>
       <div class="row" style="margin-top:10px"><button class="btn sm pri" id="exGo">Start</button><button class="btn sm bad" id="exStop">Stop</button></div></div>
+    <div class="card"><div class="h">The web link</div>
+      <div class="mu sm" style="margin-bottom:10px">Opening the link only lets people watch. Controls need the general code, and this Owner page needs the master code. Every "Master" row under "Logged in now" is a device that typed the master code. If the link got out, make a new one: the old link stops working and everyone is logged out.</div>
+      <button class="btn sm bad" id="aNewLink">Make a new link</button></div>
     <div class="card"><div class="h">General access code</div>
       <div class="mu sm" style="margin-bottom:10px">Changing it logs out everyone on the old code.</div>
       <div class="row"><input type="text" id="aCode" class="grow" maxlength="32" autocomplete="off" placeholder="New code" inputmode="numeric">
@@ -1977,6 +2026,9 @@ VIEWS.admin = {
       });
     };
     $("#aRef").onclick = () => this.load();
+    $("#aNewLink").onclick = () => confirmBox("Make a new link?", "The current link stops working right away and everyone, you included, is logged out. You'll be taken to the new link: copy it from the address bar and share it again.", "Make new link", async () => {
+      try { const j = await api("/admin/new_link", {}); location.href = j.path + "/"; } catch (e) { toast(e.message); }
+    }, true);
     $("#exGo").onclick = () => {
       const hours = +$("#exH").value, speed = +$("#exS").value;
       confirmBox("Start Y-axis exercise?", `The printer homes, lifts the nozzle, then moves Y back and forth for ${hours} h at ${speed} mm/s. Keep the build plate clear.`, "Start", async () => {
@@ -2112,7 +2164,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && un
     BOX.style.overflow = "hidden";
   }
   const btn = document.createElement("button");
-  btn.type = "button"; btn.title = "Video settings"; btn.textContent = "⚙";
+  btn.type = "button"; btn.title = "Video settings"; btn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'; btn.style.display = "grid"; btn.style.placeItems = "center";
   btn.style.cssText = "position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;width:38px;height:38px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:20px;cursor:pointer";
   if (getComputedStyle(BOX).position === "static") BOX.style.position = "relative";
   BOX.appendChild(btn);
