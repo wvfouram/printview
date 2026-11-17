@@ -746,7 +746,19 @@ function compose(...parts) {
 const printing = () => status && active(status.printer.state);
 // Print: what's printing and what's next · Control: move, heat, speed · AMS: filament and spools · Safety: spaghetti and plate
 // History: past prints, timelapses, stats · Settings: how PrintView behaves · Info: what the printer reports
-const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["historytab", "History"], ["settingstab", "Settings"], ["printer", "Info"]];
+const TABS = [["printtab", "Print"], ["control", "Move & heat"], ["amstab", "Filament"], ["safety", "Fail detection"], ["historytab", "Past prints"], ["settingstab", "Settings"], ["printer", "Printer info"]];
+// one plain sentence under the tabs saying what the open tab is for
+const TAB_HELP = {
+  printtab: "Start a print from the SD card, schedule one for later, or line prints up in the queue.",
+  control: "Move the print head and bed, set temperatures, fans and print speed.",
+  amstab: "What's loaded in the AMS, grams left on each spool, and filament prices.",
+  safety: "The Pi watches the camera for failed prints (spaghetti) and checks the plate is clear before a print.",
+  historytab: "Every finished print with its photo, timelapse videos, and stats.",
+  settingstab: "Printer name, quiet hours, what happens when a print ends, and the Pi's fan.",
+  printer: "What the printer and the Pi report: temperatures, firmware, and a log of what happened.",
+  admin: "Owner only: who's logged in, kick people, change the code, freeze controls.",
+  piadmin: "Only on the Pi itself: update and restart PrintView."
+};
 const RO_TABS = TABS;      // the public sees every tab (read-only); only Owner needs the master code
 function tabList() {
   if (window.PV_ADMIN) return TABS.concat([["admin", "Owner"], ["piadmin", "Pi admin"]]);
@@ -756,6 +768,10 @@ function renderTabs() {
   const tabs = tabList();
   $("#tabs").innerHTML = tabs.map(([k, n]) => `<button data-k="${k}" class="${k === tab ? "on" : ""}"${k === "admin" ? ' style="color:var(--ac)"' : ""}>${n}</button>`).join("");
   $("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => { tab = b.dataset.k; renderTabs(); });
+  let help = $("#tabHelp");
+  if (!help) { help = document.createElement("div"); help.id = "tabHelp"; help.className = "mu sm"; help.style.cssText = "margin:10px 4px 2px"; $("#tabs").after(help); }
+  help.textContent = TAB_HELP[tab] || "";
+  const on = $("#tabs").querySelector("button.on"); if (on && on.scrollIntoView) on.scrollIntoView({block: "nearest", inline: "nearest"});
   const v = VIEWS[tab];
   $("#views").innerHTML = "";
   const el = document.createElement("div");
@@ -824,7 +840,7 @@ function startNext(name) {
     catch (e) {
       const pf = e.data && e.data.preflight;
       if (!pf) return toast(e.message);
-      confirmBox("Check before starting", pf.reasons.map(r => "- " + r[0].toUpperCase() + r.slice(1)).join("\n") + (pf.photo ? "\n\nThe photo is in Safety > Clear-plate check." : ""), "Start anyway", () => go(true), true);
+      confirmBox("Check before starting", pf.reasons.map(r => "- " + r[0].toUpperCase() + r.slice(1)).join("\n") + (pf.photo ? "\n\nThe photo is in Fail detection > Clear-plate check." : ""), "Start anyway", () => go(true), true);
     }
   };
   confirmBox("Start the next print?", name.replace(/(\.gcode)?\.3mf$/i, "") + "\nThe Pi checks the plate and spools first.", "Start", () => go(false));
@@ -849,7 +865,7 @@ VIEWS.watch = {
   build(el) {
     el.innerHTML = `
     <div class="card">
-      <div class="row"><div class="h grow" style="margin:0">Spaghetti watch</div><span class="chip" id="sWatch">-</span></div>
+      <div class="row"><div class="h grow" style="margin:0">Failed print detection (spaghetti)</div><span class="chip" id="sWatch">-</span></div>
       <div class="bar" style="margin-top:14px"><i id="wScore" style="background:var(--ok)"></i></div>
       <div class="row fa sm" style="margin-top:6px"><span class="grow">Clean</span><span>Pause</span></div>
       <div class="div"></div>
