@@ -82,6 +82,8 @@ input[type=range]{width:100%;accent-color:var(--ac)}
 .hnote{font-family:inherit;font-size:13px}
 .kv2{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}.kv2>div{background:var(--s2);border-radius:12px;padding:10px 12px}.kv2 b{display:block;font-size:20px;margin-top:2px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}.tbl td,.tbl th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}.tbl th{color:var(--mu);font-weight:600}.tbl td.n,.tbl th.n{text-align:right}
+header h1{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#piTemp,#conn{white-space:nowrap;flex:none}
+@media (max-width:480px){#piTemp{margin-right:4px!important;padding:4px 8px}header h1{font-size:20px}#conn{font-size:12px}}
 textarea{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:80px;resize:vertical}
 .ev{display:flex;gap:12px;padding-top:10px;align-items:flex-start}.ev i{width:7px;height:7px;border-radius:9px;margin-top:7px;flex:none;background:var(--fa)}
 .slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -152,6 +154,7 @@ details>summary:before{content:"\25B8";display:inline-block;margin-right:6px;tra
 <div class="wrap">
   <header>
     <h1 id="pvName">PrintView</h1>
+    <span class="chip" id="piTemp" title="Raspberry Pi CPU temperature" style="margin-right:8px">Pi --</span>
     <span id="conn"></span>
     <button class="btn sm hide" id="lockBtn" title="Lock this browser">Lock</button>
   </header>
@@ -741,7 +744,9 @@ function compose(...parts) {
   };
 }
 const printing = () => status && active(status.printer.state);
-const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["videos", "Videos"], ["stats", "Stats"], ["printer", "Printer"]];
+// Print: what's printing and what's next · Control: move, heat, speed · AMS: filament and spools · Safety: spaghetti and plate
+// History: past prints, timelapses, stats · Settings: how PrintView behaves · Info: what the printer reports
+const TABS = [["printtab", "Print"], ["control", "Control"], ["amstab", "AMS"], ["safety", "Safety"], ["historytab", "History"], ["settingstab", "Settings"], ["printer", "Info"]];
 const RO_TABS = TABS;      // the public sees every tab (read-only); only Owner needs the master code
 function tabList() {
   if (window.PV_ADMIN) return TABS.concat([["admin", "Owner"], ["piadmin", "Pi admin"]]);
@@ -794,6 +799,8 @@ const NOW = {
     }
     const w = watchState(s);
     $("#wWatch").textContent = "Spaghetti: " + w.text; $("#wWatch").style.color = w.color;
+    const pi = s.pi || {};
+    if (pi.temp != null) { $("#piTemp").textContent = "Pi " + Math.round(pi.temp) + "°C"; $("#piTemp").style.color = pi.temp >= 80 ? "var(--bad)" : pi.temp >= 70 ? "var(--ac)" : ""; }
     const nm = s.name || "PrintView";
     if ($("#pvName").textContent !== nm) { $("#pvName").textContent = nm; document.title = nm; }
     if (!this.pubT || Date.now() - this.pubT > 300000) { this.pubT = Date.now(); pubStats(); }
@@ -932,7 +939,8 @@ const CTL = {
         <div class="grow sm" id="pcTxt" style="line-height:1.6"></div></div>
       <div class="row w" style="margin-top:10px;gap:6px"><button class="btn sm" id="pcYes">It was clear</button><button class="btn sm" id="pcNo">It wasn't clear</button><button class="btn sm pri" id="pcNow">Plate is clear now, save it</button></div>
       <div class="row" style="margin-top:12px"><span class="grow">Check the plate when a print starts</span><label class="sw"><input type="checkbox" id="pcOn"><span></span></label></div>
-      <div class="row" style="margin-top:8px"><span class="grow">Also pause the print if it's not clear</span><label class="sw"><input type="checkbox" id="pcPause"><span></span></label></div></div>`,
+      <div class="row" style="margin-top:8px"><span class="grow">Also pause the print if it's not clear</span><label class="sw"><input type="checkbox" id="pcPause"><span></span></label></div>
+      <div class="row" style="margin-top:8px"><span class="grow">Check the plate before "Start next" in the queue</span><label class="sw"><input type="checkbox" id="pcNext"><span></span></label></div></div>`,
   info: `<div class="card"><div class="h">Printer info</div><div id="cInfo"></div></div>`,
   firmware: `<div class="card"><div class="h">Firmware and serial numbers</div><div id="cDev"></div></div>`
 };
@@ -1012,9 +1020,11 @@ VIEWS.controls = {
         $("#pcNow").onclick = async () => { try { const j = await api("/api/plate/clean_now", {}); toast("Saved (" + j.clean_examples + " clear-plate examples)"); } catch (e) { toast(e.message); } };
         $("#pcOn").onchange = e => setting({plate_check: e.target.checked}, e.target.checked ? "Plate check on" : "Plate check off");
         $("#pcPause").onchange = e => setting({plate_pause: e.target.checked}, e.target.checked ? "Will pause if the plate isn't clear" : "Notify only");
+        $("#pcNext").onchange = e => setting({plate_check_next: e.target.checked}, "Saved");
       }
       if (document.activeElement !== $("#pcOn")) $("#pcOn").checked = pc.enabled !== false;
       if (document.activeElement !== $("#pcPause")) $("#pcPause").checked = !!pc.pause;
+      if (document.activeElement !== $("#pcNext")) $("#pcNext").checked = !status.settings || status.settings.plate_check_next !== false;
       const has = !!pc.t;
       $("#pcChip").textContent = !has ? "No check yet" : pc.ok ? "Looked clear" : "Not clear?";
       $("#pcChip").style.color = !has ? "var(--mu)" : pc.ok ? "var(--ok)" : "var(--bad)";
@@ -1761,25 +1771,23 @@ VIEWS.spools = {
 VIEWS.prefs = {
   build(el) {
     const sw = (id, t, d) => `<div class="row" style="padding:6px 0"><div class="grow"><div style="font-weight:600">${t}</div>${d ? `<div class="mu sm">${d}</div>` : ""}</div><label class="sw"><input type="checkbox" id="${id}"><span></span></label></div>`;
-    el.innerHTML = `<div class="card"><div class="h">Settings</div>
-      <div class="row" style="gap:8px"><div class="grow"><div style="font-weight:600">Printer name</div><div class="mu sm">Shown at the top of the website and app, and in alerts</div></div>
-        <input type="text" id="sfName" maxlength="40" placeholder="PrintView" style="width:180px"></div>
-      <div class="div"></div>
-      ${sw("sfQuiet", "Quiet hours", "A running print switches to Silent speed during these hours, and back after")}
+    el.innerHTML = `<div class="card"><div class="h">Printer</div>
+      <div class="row" style="gap:8px"><div class="grow"><div style="font-weight:600">Name</div><div class="mu sm">Shown at the top of the website and app, and in alerts</div></div>
+        <input type="text" id="sfName" maxlength="40" placeholder="PrintView" style="width:180px"></div></div>
+      <div class="card"><div class="row"><div class="h grow" style="margin:0">Quiet hours</div><span class="chip hide" id="sfQNow" style="color:var(--ac)">On now</span></div>
+      ${sw("sfQuiet", "Use quiet hours", "A running print switches to Silent speed during these hours, and back after")}
       <div class="row" style="gap:8px;margin:4px 0 6px"><span class="mu sm">From</span><input type="time" id="sfQs"><span class="mu sm">to</span><input type="time" id="sfQe"></div>
-      ${sw("sfQLight", "Also turn the chamber light off", "The camera can't see in the dark, so spaghetti detection can't work while it's off")}
-      <div class="div"></div>
-      ${sw("sfCool", "Heaters off after a print", "Makes sure the nozzle and bed are off when a print ends")}
-      <div class="row" style="padding:6px 0"><div class="grow"><div style="font-weight:600">Light off after a print</div><div class="mu sm">Waits at least 3 minutes so the finish photos are taken</div></div>
-        <select id="sfLight"><option value="0">Never</option><option value="3">3 min</option><option value="10">10 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
-      <div class="div"></div>
-      ${sw("sfNext", "Check the plate before Start next", "Looks at the bed and asks before starting if something may be on it")}
+      ${sw("sfQLight", "Also turn the chamber light off", "The camera can't see in the dark, so spaghetti detection can't work while it's off")}</div>
+      <div class="card"><div class="h">When a print ends</div>
+      ${sw("sfCool", "Turn the heaters off", "Makes sure the nozzle and bed are off")}
+      <div class="row" style="padding:6px 0"><div class="grow"><div style="font-weight:600">Turn the light off after</div><div class="mu sm">At least 3 minutes, so the finish photos are taken</div></div>
+        <select id="sfLight"><option value="0">Never</option><option value="3">3 min</option><option value="10">10 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div></div>
+      <div class="card"><div class="h">Videos and website</div>
       ${sw("sfTl", "Name and progress bar on timelapses", "For new timelapse videos and Redo")}
-      ${sw("sfPub", "Show print stats to everyone", "The small stats under the status card")}
-      <div class="mu sm hide" id="sfQNow" style="margin-top:8px;color:var(--ac)"></div></div>`;
+      ${sw("sfPub", "Show print stats to everyone", "The small stats under the status card")}</div>`;
     const S = (id, k) => $(id).onchange = e => setting({[k]: e.target.type === "checkbox" ? e.target.checked : e.target.value}, "Saved");
     S("#sfName", "printer_name"); S("#sfQuiet", "quiet_on"); S("#sfQs", "quiet_start"); S("#sfQe", "quiet_end"); S("#sfQLight", "quiet_light");
-    S("#sfCool", "finish_cooldown"); S("#sfNext", "plate_check_next"); S("#sfTl", "tl_overlay"); S("#sfPub", "public_stats");
+    S("#sfCool", "finish_cooldown"); S("#sfTl", "tl_overlay"); S("#sfPub", "public_stats");
     $("#sfLight").onchange = e => setting({finish_light_off_min: +e.target.value}, "Saved");
     if (readOnly) el.querySelectorAll("input,select").forEach(i => i.disabled = true);
   },
@@ -1787,11 +1795,10 @@ VIEWS.prefs = {
     const st = s.settings || {}, a = document.activeElement;
     const v = (id, val) => { const e = $(id); if (e && e !== a) { if (e.type === "checkbox") e.checked = !!val; else e.value = val ?? ""; } };
     v("#sfName", st.printer_name); v("#sfQuiet", st.quiet_on); v("#sfQs", st.quiet_start); v("#sfQe", st.quiet_end); v("#sfQLight", st.quiet_light);
-    v("#sfCool", st.finish_cooldown); v("#sfLight", String(st.finish_light_off_min ?? 10)); v("#sfNext", st.plate_check_next !== false);
+    v("#sfCool", st.finish_cooldown); v("#sfLight", String(st.finish_light_off_min ?? 10));
     v("#sfTl", st.tl_overlay !== false); v("#sfPub", st.public_stats !== false);
     const au = s.automation || {};
     $("#sfQNow").classList.toggle("hide", !au.quiet_now);
-    $("#sfQNow").textContent = "Quiet hours are on right now.";
   }
 };
 
@@ -1886,10 +1893,37 @@ VIEWS.piadmin = {
 VIEWS.control = compose(["controls", ["speed", "temps", "fans"]], ["controls", ["move", "options", "calib"], () => !readOnly], ["controls", ["gcode"], () => role === "master" && !readOnly]);
 VIEWS.printtab = compose(["job", null, printing], ["queue"], ["print"]);
 VIEWS.amstab = compose(["ams"], ["spools"], ["controls", ["amsopts"]]);
-VIEWS.stats = compose(["statsv"]);
+// a tab with a small switcher on top (History: Prints / Timelapses / Stats)
+function subtabs(key, parts) {
+  return {
+    build(el) {
+      const cur = subSel[key] || parts[0][0];
+      el.innerHTML = `<div class="seg" style="margin-bottom:2px">${parts.map(([n]) => `<button data-v="${n}" class="${n === cur ? "on" : ""}">${n}</button>`).join("")}</div><div></div>`;
+      const box = el.lastElementChild;
+      this.child = (parts.find(p => p[0] === cur) || parts[0])[1];
+      this.child.build(box);
+      el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { subSel[key] = b.dataset.v; renderTabs(); });
+    },
+    update(s) { if (this.child && this.child.update) this.child.update(s); }
+  };
+}
+const subSel = {};
+VIEWS.historytab = subtabs("history", [["Prints", compose(["history"])], ["Timelapses", compose(["timelapses"])], ["Stats", compose(["statsv"])]]);
+VIEWS.settingstab = compose(["prefs"], ["pifan"]);
 VIEWS.safety = compose(["watch"], ["controls", ["plate"]], ["train"]);
-VIEWS.videos = compose(["timelapses"], ["history"]);
-VIEWS.printer = compose(["controls", ["info"]], ["prefs"], ["pifan"], ["activity"], ["controls", ["firmware"]], ["flow", null, () => role === "master" && !readOnly]);
+
+VIEWS.pihealth = {
+  build(el) { el.innerHTML = '<div class="card"><div class="h">Raspberry Pi</div><div class="kv2" id="piBox"></div></div>'; },
+  update(s) {
+    const p = s.pi || {}, b = $("#piBox"); if (!b) return;
+    const t = p.temp;
+    b.innerHTML = `<div><span class="mu sm">CPU temperature</span><b style="color:${t >= 80 ? "var(--bad)" : t >= 70 ? "var(--ac)" : "var(--tx)"}">${t != null ? t.toFixed(1) + "°C" : "--"}</b><span class="fa sm">${t >= 80 ? "Too hot, slowing down" : t >= 70 ? "Warm" : "OK"}</span></div>`
+      + `<div><span class="mu sm">Memory</span><b>${p.mem_total_mb ? (p.mem_used_mb / 1024).toFixed(1) + " GB" : "--"}</b><span class="fa sm">${p.mem_total_mb ? "of " + (p.mem_total_mb / 1024).toFixed(1) + " GB" : ""}</span></div>`
+      + `<div><span class="mu sm">Storage free</span><b>${p.disk_free_gb != null ? p.disk_free_gb + " GB" : "--"}</b><span class="fa sm">${p.disk_total_gb ? "of " + p.disk_total_gb + " GB" : ""}</span></div>`
+      + `<div><span class="mu sm">Running for</span><b>${p.up_h != null ? (p.up_h >= 48 ? Math.round(p.up_h / 24) + " days" : Math.round(p.up_h) + " h") : "--"}</b></div>`;
+  }
+};
+VIEWS.printer = compose(["pihealth"], ["controls", ["info"]], ["activity"], ["controls", ["firmware"]], ["flow", null, () => role === "master" && !readOnly]);
 
 // ---------- Command center (master code only)
 VIEWS.admin = {

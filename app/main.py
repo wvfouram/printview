@@ -351,6 +351,36 @@ async def index(request):
     return web.FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+def _pi_health():
+    """The Pi's own CPU temperature, memory and storage (readable from inside the container)."""
+    out = {}
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            out["temp"] = round(int(f.read()) / 1000, 1)
+    except (OSError, ValueError):
+        out["temp"] = None
+    try:
+        mem = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, v = line.split(":", 1)
+                mem[k] = int(v.split()[0]) // 1024
+        out["mem_used_mb"], out["mem_total_mb"] = mem["MemTotal"] - mem["MemAvailable"], mem["MemTotal"]
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
+        du = shutil.disk_usage(os.environ.get("DATA_DIR", "/data"))
+        out["disk_free_gb"], out["disk_total_gb"] = round(du.free / 1e9), round(du.total / 1e9)
+    except OSError:
+        pass
+    try:
+        with open("/proc/uptime") as f:
+            out["up_h"] = round(float(f.read().split()[0]) / 3600, 1)
+    except (OSError, ValueError):
+        pass
+    return out
+
+
 def full_status(app):
     return {
         "t": int(time.time()),
@@ -375,6 +405,7 @@ def full_status(app):
         "queue": app["queue"].status(),
         "automation": app["automation"].status(),
         "pifan": app["pifan"].status(),
+        "pi": _pi_health(),
         "name": app["settings"].get("printer_name") or "",
     }
 
