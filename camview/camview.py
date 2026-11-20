@@ -722,7 +722,7 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "private, no-cache")     # checks for a new version, re-downloads only if changed
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         # The slicer runs its engine as WebAssembly in background workers made from the page itself.
-        self.csp = ("default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: data:; "
+        self.csp = ("default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:; "
                     "worker-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; "
                     "connect-src 'self' blob: data:; font-src 'self' data:; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
         self.end_headers()

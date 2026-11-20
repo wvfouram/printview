@@ -21,3 +21,42 @@
     });
   }, true);
 })();
+
+/* Engine diagnostics: if the slicing engine fails, say why instead of "Engine worker failed: unknown". */
+(function () {
+  "use strict";
+  var detail = [];
+  window.__pvEngineDetail = detail;
+  if (typeof WebAssembly !== "object") detail.push("This browser has WebAssembly turned off, and the slicer's engine needs it.");
+  var OrigBlob = window.Blob;
+  window.Blob = function (parts, opts) {
+    try {
+      if (parts && parts.length && typeof parts[parts.length - 1] === "string" && parts[parts.length - 1].indexOf("SecondSlice(") >= 0) {
+        parts = ["self.addEventListener('unhandledrejection', function (e) { var r = e.reason; postMessage({ t: 'log', s: 'PV-ENGINE-ERROR ' + (r && (r.stack || r.message) || r) }); });\n" +
+                 "self.addEventListener('error', function (e) { postMessage({ t: 'log', s: 'PV-ENGINE-ERROR ' + (e.message || 'error') + ' @' + (e.lineno || '?') }); });\n"].concat(parts);
+      }
+    } catch (e) { }
+    return new OrigBlob(parts, opts);
+  };
+  window.Blob.prototype = OrigBlob.prototype;
+  var origLog = console.log;
+  console.log = function () {
+    try { var a = arguments; if (a[0] === "[orca]" && String(a[1]).indexOf("PV-ENGINE-ERROR") === 0) detail.push(String(a[1]).slice(16)); } catch (e) { }
+    return origLog.apply(console, arguments);
+  };
+  var OrigWorker = window.Worker;
+  window.Worker = function (url, o) {
+    var w = new OrigWorker(url, o);
+    w.addEventListener("error", function (e) { detail.push("Worker error: " + (e.message || "the engine couldn't start in this browser") + (e.lineno ? " (line " + e.lineno + ")" : "")); });
+    return w;
+  };
+  window.Worker.prototype = OrigWorker.prototype;
+  var origAlert = window.alert;
+  window.alert = function (msg) {
+    if (/Engine worker failed|atob|Slice failed/.test(String(msg))) {
+      var extra = detail.length ? "\n\nDetails:\n" + detail.slice(-4).join("\n") : "";
+      msg = String(msg) + extra + "\n\nIf you use Microsoft Edge: Settings > Privacy > 'Enhance your security on the web' can turn off what the engine needs. Add this site as an exception, or try Chrome. Then reload this page.";
+    }
+    return origAlert.call(window, msg);
+  };
+})();
