@@ -1307,7 +1307,7 @@ async function load3d(f, plate) {
 // ---------- Print from SD
 VIEWS.print = {
   build(el) {
-    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm nav" id="pRef">Refresh</button></div>
+    el.innerHTML = `<div class="card"><div class="row"><div class="h grow" style="margin:0">Files on the SD card</div><a class="btn sm ro-ok nav" href="${BASE}/slicer" target="_blank" rel="noopener" style="margin-right:6px" title="Slice an STL, STEP or 3MF in your browser and send it to the printer">Slicer</a><button class="btn sm" id="pUp" style="margin-right:6px">Upload</button><button class="btn sm nav" id="pRef">Refresh</button></div>
       <div class="mu sm" id="pUpMsg" style="margin-top:6px"></div>
       <div class="row" style="margin-top:10px;gap:6px"><input type="text" id="pQ" class="grow nav" placeholder="Search files"><select id="pSort" class="nav"><option value="new">Newest</option><option value="old">Oldest</option><option value="az">Name A-Z</option><option value="big">Biggest</option></select></div>
       <div class="list" id="pList" style="margin-top:10px"><div class="skel"></div><div class="skel"></div></div>
@@ -1337,6 +1337,14 @@ VIEWS.print = {
       const files = Array.isArray(j) ? j : j.list || [];
       this.files = files.map((f, i) => Object.assign({}, f, {order: i}));
       this.draw();
+      // coming back from the slicer: open the file that was just sent
+      const want = new URLSearchParams(location.search).get("open");
+      if (want) {
+        const f = this.files.find(x => x.path === want);
+        if (!f && !refresh) return this.load(true);          // just uploaded: read the SD card again
+        history.replaceState(null, "", location.pathname);
+        if (f) this.open(f);
+      }
     } catch (e) { $("#pList").innerHTML = `<div style="color:var(--bad)">${esc(e.message)}</div>`; }
     try {
       const sj = ((await api("/api/schedule")).items || []).filter(x => x.status === "waiting" || Date.now() / 1000 - (x.done || x.at) < 86400);

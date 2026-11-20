@@ -174,6 +174,7 @@ cd ~/printview && git pull && ./install.sh
 - **AMS tab:** every AMS unit and slot (including AMS HT), temperature and humidity, load / unload, set filament, K values.
 - **Safety tab:** local AI **spaghetti detection** with auto-pause (it ignores the first layers, which fool it), a **clear-plate check** when a print starts and before *Start next*, and your own trainable model.
 - **Videos tab:** smooth per-layer **timelapses** made by the Pi (with the print name and a progress bar), timelapses from the SD card, and print history with a photo of every finished print.
+- **Slicer:** an OrcaSlicer-style slicer (Second Slice) that runs in your browser. Load an STL or STEP, slice with the Bambu P1S profiles, and tap *Send to printer*: the sliced file goes onto the printer's SD card and opens in PrintView to start, schedule or queue. Open it with the *Slicer* button in the Print tab, or at `<your link>/slicer`.
 - **Stats tab:** success rate, hours, filament used and cost per month, most printed files, why prints failed, and the slicer's time estimate next to the real time.
 - **Spools and cost:** grams left on every spool (Bambu tags report it themselves, others you type in once), a warning before a print if a spool won't last, and the cost of every print from your price per kg.
 - **Print history notes:** rate any print 1 to 5 stars and add a note.

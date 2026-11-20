@@ -483,6 +483,32 @@ def frame(path="/frame.jpg"):
 
 
 PAGE_FILE = os.path.join(HERE, "page.html")
+SLICER_FILE = os.path.join(HERE, "second-slice.html")
+BRIDGE_FILE = os.path.join(HERE, "slicer_bridge.js")
+_slicer_cache = {"key": None, "page": None}
+_slicer_lock = threading.Lock()
+
+
+def _slicer_page():
+    """(plain, gzipped, etag) of the slicer with the PrintView bridge added. Rebuilt when either file changes."""
+    import gzip
+    try:
+        key = (os.path.getmtime(SLICER_FILE), os.path.getsize(SLICER_FILE), os.path.getmtime(BRIDGE_FILE))
+    except OSError:
+        return None
+    with _slicer_lock:
+        if _slicer_cache["key"] != key:
+            html = open(SLICER_FILE, "rb").read()
+            # The slicer starts its engine 0.5 s after its script runs, but the engine data sits further down
+            # the page, so over the internet it isn't loaded yet and the first slice fails. Wait for the full page.
+            html = html.replace(b"setTimeout(() => { loadEngine().catch((e) => { status(e.message); }); }, 500);",
+                                b"window.addEventListener('load', () => setTimeout(() => { loadEngine().catch((e) => { status(e.message); }); }, 500));")
+            bridge = b"<script>\n" + open(BRIDGE_FILE, "rb").read() + b"\n</script>\n"
+            i = html.rfind(b"</body>")
+            html = html[:i] + bridge + html[i:] if i >= 0 else html + bridge
+            _slicer_cache["page"] = (html, gzip.compress(html, 6), '"' + hashlib.md5(html).hexdigest()[:16] + '"')
+            _slicer_cache["key"] = key
+        return _slicer_cache["page"]
 SAFE_PATH = re.compile(r"/[A-Za-z0-9_./-]*")
 
 
@@ -534,10 +560,11 @@ class H(BaseHTTPRequestHandler):
 
     def end_headers(self):
         # Browser protections on every response: only load things from this page, never in a frame.
-        self.send_header("Content-Security-Policy",
+        self.send_header("Content-Security-Policy", getattr(self, "csp", None) or
                          "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; "
                          "script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; "
                          "base-uri 'none'; form-action 'self'")
+        self.csp = None
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Strict-Transport-Security", "max-age=31536000")
         super().end_headers()
@@ -566,6 +593,8 @@ class H(BaseHTTPRequestHandler):
             return self.send(404, "not found")
         sub = path[len(BASE):] or "/"
 
+        if method == "GET" and sub in ("/slicer", "/slicer/"):
+            return self.slicer()
         if method == "GET" and sub in ("/", ""):
             visit(self.ip(), self.headers.get("User-Agent") or "", "opens")
             html = open(PAGE_FILE, encoding="utf-8").read().replace("__BASE__", BASE)
@@ -662,6 +691,36 @@ class H(BaseHTTPRequestHandler):
         if method == "GET" and sub == "/detection.jpg":
             return self.proxy(method, sub)
         return self.send(404, "not found")
+
+    def slicer(self):
+        """The in-browser slicer (Second Slice). It slices on the viewer's own device; "Send to printer"
+        uploads the result through PrintView's normal upload (needs the general code)."""
+        page = _slicer_page()
+        if not page:
+            return self.send(404, "The slicer isn't installed on this Pi (second-slice.html missing).")
+        raw, gz, etag = page
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        use_gz = "gzip" in (self.headers.get("Accept-Encoding") or "")
+        body = gz if use_gz else raw
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        if use_gz:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", "private, no-cache")     # checks for a new version, re-downloads only if changed
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        # The slicer runs its engine as WebAssembly in background workers made from the page itself.
+        self.csp = ("default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: data:; "
+                    "worker-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; "
+                    "connect-src 'self' blob: data:; font-src 'self' data:; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
+        self.end_headers()
+        self.wfile.write(body)
 
     def public_streams(self, query):
         try:
