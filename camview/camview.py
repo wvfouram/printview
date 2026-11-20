@@ -485,6 +485,7 @@ def frame(path="/frame.jpg"):
 PAGE_FILE = os.path.join(HERE, "page.html")
 SLICER_FILE = os.path.join(HERE, "second-slice.html")
 BRIDGE_FILE = os.path.join(HERE, "slicer_bridge.js")
+EARLY_FILE = os.path.join(HERE, "slicer_early.js")
 _slicer_cache = {"key": None, "page": None}
 _slicer_lock = threading.Lock()
 
@@ -493,7 +494,8 @@ def _slicer_page():
     """(plain, gzipped, etag) of the slicer with the PrintView bridge added. Rebuilt when either file changes."""
     import gzip
     try:
-        key = (os.path.getmtime(SLICER_FILE), os.path.getsize(SLICER_FILE), os.path.getmtime(BRIDGE_FILE))
+        key = (os.path.getmtime(SLICER_FILE), os.path.getsize(SLICER_FILE), os.path.getmtime(BRIDGE_FILE),
+               os.path.getmtime(EARLY_FILE))
     except OSError:
         return None
     with _slicer_lock:
@@ -504,6 +506,10 @@ def _slicer_page():
             html = html.replace(b"setTimeout(() => { loadEngine().catch((e) => { status(e.message); }); }, 500);",
                                 b"window.addEventListener('load', () => setTimeout(() => { loadEngine().catch((e) => { status(e.message); }); }, 500));")
             bridge = b"<script>\n" + open(BRIDGE_FILE, "rb").read() + b"\n</script>\n"
+            early = b"<script>\n" + open(EARLY_FILE, "rb").read() + b"\n</script>\n"
+            h = html.find(b"<head>")
+            if h >= 0:
+                html = html[:h + 6] + b"\n" + early + html[h + 6:]
             i = html.rfind(b"</body>")
             html = html[:i] + bridge + html[i:] if i >= 0 else html + bridge
             _slicer_cache["page"] = (html, gzip.compress(html, 6), '"' + hashlib.md5(html).hexdigest()[:16] + '"')

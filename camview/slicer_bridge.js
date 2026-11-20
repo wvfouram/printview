@@ -105,6 +105,7 @@
     exp.parentNode.parentNode.insertBefore(back, wrap.nextSibling);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addButton); else addButton();
+
   // If the engine tried to start before the whole page had arrived, start it again now that it has.
   window.addEventListener("load", function () {
     try {

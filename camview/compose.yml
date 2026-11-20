@@ -12,5 +12,6 @@ services:
       - ./page.html:/app/page.html:ro
       - ./second-slice.html:/app/second-slice.html:ro
       - ./slicer_bridge.js:/app/slicer_bridge.js:ro
+      - ./slicer_early.js:/app/slicer_early.js:ro
       - ./data:/data
     command: python -u /app/camview.py
