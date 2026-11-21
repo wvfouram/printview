@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """PrintView Admin window: shows the admin website (http://127.0.0.1:8095) in its own window,
 using the WebKit engine library. Not a browser: no address bar, no other sites, nothing else installed."""
+import os
+# The Pi's graphics driver draws WebKit pages scrambled with its newer buffer-sharing renderer; use the plain one.
+os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
 import gi
 gi.require_version("Gtk", "3.0")
 try:
@@ -20,7 +23,6 @@ def main():
     s = view.get_settings()
     s.set_enable_webgl(True)
     s.set_enable_javascript(True)
-    s.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ALWAYS)
     s.set_javascript_can_open_windows_automatically(True)
 
     # links that open a new tab (Slicer, videos) open in a second window of this app
