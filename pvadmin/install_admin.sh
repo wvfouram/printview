@@ -25,7 +25,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now pvadmin
 sudo systemctl restart pvadmin
 
-BROWSER=$(command -v chromium || command -v chromium-browser || echo chromium)
+python3 -c "import gi; gi.require_version('WebKit2', '4.1')" 2>/dev/null || sudo apt-get install -y gir1.2-webkit2-4.1
 mkdir -p "$HOME/.local/share/applications" "$HOME/Desktop"
 for f in "$HOME/.local/share/applications/pvadmin.desktop" "$HOME/Desktop/pvadmin.desktop"; do
   cat > "$f" <<DESK
@@ -33,7 +33,7 @@ for f in "$HOME/.local/share/applications/pvadmin.desktop" "$HOME/Desktop/pvadmi
 Type=Application
 Name=PrintView Admin
 Comment=Full control of PrintView (this Pi only)
-Exec=$BROWSER --app=http://127.0.0.1:8095 --window-size=1400,900 --class=PrintViewAdmin
+Exec=/usr/bin/python3 $HOME/pvadmin/printview_window.py
 Icon=applications-system
 Terminal=false
 Categories=Utility;
