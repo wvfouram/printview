@@ -43,7 +43,9 @@ def find_dirs():
 APP_DIR, CAM_DIR = find_dirs()
 
 CSS = b"""
-window, .bg { background: #0b0c0e; color: #f2f0eb; }
+window, .bg, dialog, messagedialog, dialog box { background: #141619; color: #f2f0eb; }
+calendar { background: #1c1f23; color: #f2f0eb; border: 1px solid #353a41; }
+calendar:selected { background: #ffb224; color: #1a1206; }
 headerbar { background: #141619; border-bottom: 1px solid #2a2e34; color: #f2f0eb; }
 headerbar .title { font-weight: 700; }
 stacksidebar, stacksidebar list { background: #101215; }
@@ -476,7 +478,7 @@ class Admin(Gtk.Window):
     def build_files(self):
         sw, box = page()
         c = card("Files on the printer's SD card")
-        c.pack_start(row(btn("Refresh", lambda: self.load_files(True)), lab("  To pick filaments for a multi-color print, use the website.", "mu")), False, False, 0)
+        c.pack_start(row(btn("Refresh", lambda: self.load_files(True)), lab("  Print / Schedule picks the plate, filament slots, speed, and a day and time.", "mu")), False, False, 0)
         self.fbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         c.pack_start(self.fbox, False, False, 0)
         box.pack_start(c, False, False, 0)
@@ -489,9 +491,7 @@ class Admin(Gtk.Window):
             if not files:
                 self.fbox.pack_start(lab("No sliced files on the SD card.", "mu"), False, False, 0)
             for f in files:
-                q = btn("Add to queue", lambda ff=f: self.act(lambda: call("/api/queue", {"path": ff["path"], "plate": 1, "use_ams": True, "ams_mapping": [],
-                                                                                           "timelapse": False, "bed_leveling": True, "flow_cali": False,
-                                                                                           "vibration_cali": True}), "Added to the queue"))
+                q = btn("Print / Schedule...", lambda ff=f: self.start_dialog(ff), "pri")
                 dl = btn("Download", lambda ff=f: self.download(ff))
                 de = btn("Delete", lambda ff=f: self.confirm("Delete " + ff["title"] + "?", "It's removed from the SD card (a copy is kept on the Pi).", "Delete",
                                                             lambda: self.act(lambda: call("/api/files/delete", {"path": ff["path"]}), "Deleted", lambda _: self.load_files(True)), True), "danger")
@@ -501,6 +501,121 @@ class Admin(Gtk.Window):
             self.fbox.show_all()
         self.toast("Reading the SD card...")
         bg(lambda: call("/api/files" + ("?refresh=1" if refresh else ""), timeout=90), show, lambda m: self.toast(m, True))
+
+    # ------------------------------------------------------------ print now / schedule / queue
+    def start_dialog(self, f):
+        self.toast("Reading " + f["title"] + "...")
+        bg(lambda: (call("/api/files/info?path=" + urllib.parse.quote(f["path"]), timeout=120), call("/api/status", timeout=10)),
+           lambda r: self._start_dialog(f, *r), lambda m: self.toast(m, True))
+
+    def _start_dialog(self, f, info, st):
+        plates = [p for p in info.get("plates") or [] if p.get("sliced")]
+        if not plates:
+            return self.toast("This file has no sliced plates", True)
+        ams = (st.get("printer") or {}).get("ams") or {}
+        trays = [t for t in ams.get("trays") or [] if not t.get("empty")]
+        d = Gtk.Dialog(title="Print " + f["title"], transient_for=self, modal=True)
+        d.set_default_size(560, -1)
+        box = d.get_content_area()
+        box.set_spacing(10)
+        box.set_border_width(16)
+        box.pack_start(lab(f["title"], wrap=True), False, False, 0)
+
+        pl = Gtk.ComboBoxText()
+        for p in plates:
+            pl.append(str(p["index"]), f"Plate {p['index']}  ·  {mins((p.get('seconds') or 0) / 60)}" + (f"  ·  {round(p['weight_g'])} g" if p.get("weight_g") else ""))
+        pl.set_active(0)
+        box.pack_start(row(lab("Plate"), pl), False, False, 0)
+
+        # filament -> AMS slot, best match by type and color (like the website)
+        fbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.pack_start(fbox, False, False, 0)
+        combos = []
+
+        def dist(a, b):
+            try:
+                a, b = (a or "").lstrip("#"), (b or "").lstrip("#")
+                return sum((int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) ** 2 for i in (0, 2, 4))
+            except ValueError:
+                return 10 ** 6
+
+        def fill_fils(*_):
+            clear(fbox)
+            combos.clear()
+            p = next(x for x in plates if str(x["index"]) == pl.get_active_id())
+            for fl in p.get("filaments") or []:
+                c = Gtk.ComboBoxText()
+                for t in trays:
+                    c.append(str(t["slot"]), f"AMS {'HT' if t['unit'] >= 128 else t['unit']} slot {t['tray']}  ·  {t['type']}")
+                c.append("254", "External spool")
+                same = [t for t in trays if (t.get("type") or "").upper() == (fl.get("type") or "").upper()]
+                best = min(same, key=lambda t: dist(fl.get("color"), t.get("color")))["slot"] if same else (trays[0]["slot"] if trays else 254)
+                c.set_active_id(str(best))
+                combos.append((fl["id"], c))
+                fbox.pack_start(row(lab(f"Filament {fl['id']}  ·  {fl.get('type', '')}  {fl.get('color', '')}"), c, expand_first=True), False, False, 0)
+            fbox.show_all()
+        pl.connect("changed", fill_fils)
+        fill_fils()
+
+        spd = Gtk.ComboBoxText()
+        for i, n in enumerate(SPEEDS):
+            spd.append(str(i + 1), n)
+        spd.set_active_id("2")
+        lvl = Gtk.CheckButton(label="Bed leveling")
+        lvl.set_active(True)
+        tl = Gtk.CheckButton(label="Printer timelapse")
+        box.pack_start(row(lab("Speed"), spd, lvl, tl), False, False, 0)
+
+        # when (for Schedule)
+        cal = Gtk.Calendar()
+        t = time.localtime(time.time() + 3600)
+        hh = Gtk.SpinButton.new_with_range(1, 12, 1)
+        mm = Gtk.SpinButton.new_with_range(0, 55, 5)
+        hh.set_value(((t.tm_hour + 11) % 12) + 1)
+        mm.set_value(0)
+        ap = Gtk.ComboBoxText()
+        ap.append("am", "AM")
+        ap.append("pm", "PM")
+        ap.set_active_id("pm" if t.tm_hour >= 12 else "am")
+        cal.select_month(t.tm_mon - 1, t.tm_year)
+        cal.select_day(t.tm_mday)
+        box.pack_start(lab("For Schedule: pick the day and time", "mu"), False, False, 4)
+        box.pack_start(cal, False, False, 0)
+        box.pack_start(row(lab("Time"), hh, lab(":"), mm, ap), False, False, 0)
+
+        d.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        d.add_button("Add to queue", 2)
+        d.add_button("Schedule", 3)
+        bnow = d.add_button("Print now", 1)
+        bnow.get_style_context().add_class("pri")
+        d.show_all()
+        resp = d.run()
+
+        mapping = [(fid, int(c.get_active_id() or 254)) for fid, c in combos]
+        ext = any(sl == 254 for _, sl in mapping)
+        arr = [-1] * max([fid for fid, _ in mapping] or [1])
+        for fid, sl in mapping:
+            arr[fid - 1] = sl
+        body = {"path": f["path"], "plate": int(pl.get_active_id()), "use_ams": not ext, "ams_mapping": [] if ext else arr,
+                "timelapse": tl.get_active(), "bed_leveling": lvl.get_active(), "flow_cali": False, "vibration_cali": True,
+                "speed": int(spd.get_active_id())}
+        y, m0, dd = cal.get_date()
+        h = int(hh.get_value()) % 12 + (12 if ap.get_active_id() == "pm" else 0)
+        at = int(time.mktime((y, m0 + 1, dd, h, int(mm.get_value()), 0, 0, 0, -1)))
+        d.destroy()
+
+        if resp == 1:
+            self.confirm("Start " + f["title"] + " now?", "Make sure the plate is clear.", "Start",
+                         lambda: self.act(lambda: call("/api/print", body, timeout=60), "Print started"))
+        elif resp == 2:
+            self.act(lambda: call("/api/queue", body), "Added to the queue", lambda _: self.load_queue())
+        elif resp == 3:
+            if at < time.time() + 30:
+                return self.toast("Pick a time in the future", True)
+            when = time.strftime("%a %b %-d, %-I:%M %p", time.localtime(at))
+            b2 = dict(body, at=at)
+            self.confirm("Schedule " + f["title"] + "?", "Starts " + when + ". Clear the plate before then.", "Schedule",
+                         lambda: self.act(lambda: call("/api/schedule", b2), "Scheduled for " + when, lambda _: self.load_queue()))
 
     def download(self, f):
         d = Gtk.FileChooserDialog(title="Save file", parent=self, action=Gtk.FileChooserAction.SAVE)
