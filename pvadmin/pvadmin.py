@@ -76,8 +76,8 @@ S="$T/printview-main"
 echo "== Copying files"
 for f in "$S"/app/*.py; do b=$(basename "$f"); [ "$b" = printer.py ] && continue; cp "$f" "$APP_DIR/app/$b"; done
 cp -r "$S"/app/static "$APP_DIR/app/" 2>/dev/null || true
-cp "$S"/camview/camview.py "$S"/camview/page.html "$CAM_DIR/"
-mkdir -p "$HOME/pvadmin" && cp "$S"/pvadmin/pvadmin.py "$HOME/pvadmin/pvadmin.py"
+cp "$S"/camview/camview.py "$S"/camview/page.html "$S"/camview/second-slice.html "$S"/camview/slicer_bridge.js "$S"/camview/slicer_early.js "$CAM_DIR/"
+mkdir -p "$HOME/pvadmin" && cp "$S"/pvadmin/*.py "$HOME/pvadmin/"
 grep -q 'c 81:' "$APP_DIR/docker-compose.yml" || sed -i 's|      - "c 188:\* rmw".*|&\n      - "c 81:* rmw"              # video* (USB webcam)|' "$APP_DIR/docker-compose.yml"
 grep -q 'c 116:' "$APP_DIR/docker-compose.yml" || sed -i 's|      - "c 81:\* rmw".*|&\n      - "c 116:* rmw"             # sound devices (USB webcam mic)|' "$APP_DIR/docker-compose.yml"
 rm -rf "$T"
@@ -204,6 +204,8 @@ class H(BaseHTTPRequestHandler):
             html = html.replace("<script>\n\"use strict\";", "<script>window.PV_ADMIN = true;</script>\n<script>\n\"use strict\";", 1)
             html = html.replace("<title>PrintView</title>", "<title>PrintView Admin</title>", 1).replace("<h1>PrintView</h1>", "<h1>PrintView Admin</h1>", 1)
             return self.send(200, html, "text/html; charset=utf-8")
+        if path in ("/slicer", "/slicer/"):
+            return self.slicer()
         if path == "/me":
             return self.js(200, {"unlocked": True, "role": "master", "frozen": False})
         if path in ("/login", "/logout"):
@@ -231,6 +233,24 @@ class H(BaseHTTPRequestHandler):
             name = "camview" if "camview" in q else "printwatch"
             return self.js(200, {"name": name, "text": docker_logs(name)})
         return self.send(404, "not found", "text/plain")
+
+    def slicer(self):
+        """The same in-browser slicer as the web link, with Send to printer."""
+        try:
+            html = open(os.path.join(CAM_DIR, "second-slice.html"), "rb").read()
+            early = open(os.path.join(CAM_DIR, "slicer_early.js"), "rb").read()
+            bridge = open(os.path.join(CAM_DIR, "slicer_bridge.js"), "rb").read()
+        except OSError:
+            return self.send(404, "The slicer files aren't in " + CAM_DIR + " yet. Run Update.", "text/plain")
+        html = html.replace(b"setTimeout(() => { loadEngine().catch((e) => { status(e.message); }); }, 500);",
+                            b"window.addEventListener('load', () => setTimeout(() => { loadEngine().catch((e) => { status(e.message); }); }, 500));")
+        h = html.find(b"<head>")
+        if h >= 0:
+            html = html[:h + 6] + b"\n<script>\n" + early + b"\n</script>\n" + html[h + 6:]
+        i = html.rfind(b"</body>")
+        tail = b"<script>\n" + bridge + b"\n</script>\n"
+        html = html[:i] + tail + html[i:] if i >= 0 else html + tail
+        return self.send(200, html, "text/html; charset=utf-8")
 
     def do_GET(self):
         self.route("GET")
