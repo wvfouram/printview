@@ -281,6 +281,47 @@ void main(){
   c = cc * band * (1.08 - 0.55 * d);
 }`;
   const FS = `precision mediump float; varying vec3 c; void main(){ gl_FragColor = vec4(c, 1.0); }`;
+  // Solid view: every extrusion drawn as a small rounded-off box (line width x layer height), lit,
+  // so the preview looks like the real printed part. One template box, instanced per segment.
+  const SVS = `precision highp float;
+attribute vec3 tv; attribute vec2 tn;
+attribute vec3 a; attribute vec3 b; attribute float f; attribute float l; attribute float hh;
+uniform mat4 mvp; uniform float vis[6]; uniform vec3 col[6]; uniform float top; uniform float wid;
+varying vec3 c; varying vec3 n;
+void main(){
+  int fi = int(f + 0.5); float v = 0.0; vec3 cc = vec3(0.6);
+  for (int i = 0; i < 6; i++) { if (i == fi) { v = vis[i]; cc = col[i]; } }
+  if (v < 0.5 || l > top) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); c = cc; n = vec3(0.0, 0.0, 1.0); return; }
+  vec3 A = a / 50.0, B = b / 50.0;
+  vec2 dxy = B.xy - A.xy; float len = length(dxy);
+  vec3 d = len > 0.0001 ? vec3(dxy / len, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 s = vec3(-d.y, d.x, 0.0);
+  float h = clamp(hh, 0.04, 0.8), w = wid;
+  vec3 base = mix(A - d * w * 0.5, B + d * w * 0.5, tv.x);
+  vec3 P = base + s * (tv.y * w * 0.5) + vec3(0.0, 0.0, (tv.z - 1.0) * 0.5 * h);
+  gl_Position = mvp * vec4(P, 1.0);
+  n = normalize(s * tn.x + d * tn.y + vec3(0.0, 0.0, tv.z > 0.0 && abs(tn.x) + abs(tn.y) < 0.5 ? 1.0 : 0.0));
+  if (l > top - 0.5) cc = mix(cc, vec3(1.0), 0.3);
+  c = cc * (0.95 + 0.05 * mod(l, 2.0));      // faint layer lines, like the real part
+}`;
+  const SFS = `precision mediump float; varying vec3 c; varying vec3 n; uniform vec3 ld; uniform vec3 ld2;
+void main(){
+  vec3 N = normalize(n);
+  float k = 0.38 + 0.52 * max(dot(N, ld), 0.0) + 0.22 * max(dot(N, ld2), 0.0);
+  gl_FragColor = vec4(c * k, 1.0);
+}`;
+  // template box: x = along the move (0/1), y = side (-1/1), z = bottom/top (-1/1); normal (side, along)
+  function boxTemplate() {
+    const v = [], nn = [];
+    const quad = (p0, p1, p2, p3, nx, ny) => { for (const q of [p0, p1, p2, p0, p2, p3]) { v.push(...q); nn.push(nx, ny); } };
+    quad([0, -1, 1], [1, -1, 1], [1, 1, 1], [0, 1, 1], 0, 0);          // top
+    quad([0, 1, -1], [1, 1, -1], [1, 1, 1], [0, 1, 1], 1, 0);          // left side
+    quad([0, -1, -1], [0, -1, 1], [1, -1, 1], [1, -1, -1], -1, 0);     // right side
+    quad([1, -1, -1], [1, -1, 1], [1, 1, 1], [1, 1, -1], 0, 1);        // end cap
+    quad([0, -1, -1], [0, 1, -1], [0, 1, 1], [0, -1, 1], 0, -1);       // start cap
+    return {v: new Float32Array(v), n: new Float32Array(nn), count: v.length / 3};
+  }
+
   const BVS = `precision highp float; attribute vec3 p; uniform mat4 mvp; void main(){ gl_Position = mvp * vec4(p, 1.0); }`;
   const BFS = `precision mediump float; uniform vec4 col; void main(){ gl_FragColor = col; }`;
 
@@ -307,8 +348,10 @@ void main(){
     try { d = parse(buf); } catch (e) { return fail("Couldn't read the toolpath."); }
     const gl = cv.getContext("webgl", {antialias: true}) || cv.getContext("experimental-webgl");
     if (!gl) return fail("3D isn't available in this browser (WebGL is off).");
-    let P, B;
+    let P, B, S3 = null;
     try { P = prog(gl, VS, FS); B = prog(gl, BVS, BFS); } catch (e) { return fail("3D isn't available on this device."); }
+    const inst = gl.getExtension("ANGLE_instanced_arrays");
+    if (inst) { try { S3 = prog(gl, SVS, SFS); } catch (e) { S3 = null; } }
 
     // per-vertex buffers (2 vertices per segment)
     const n = d.n, lv = new Uint16Array(n * 2), fv = new Uint8Array(n * 2), layStart = new Uint32Array(d.layers + 1);
@@ -320,6 +363,23 @@ void main(){
     while (li <= d.layers) layStart[li++] = n;
     const mk = (data) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; };
     const bPos = mk(d.pos), bL = mk(lv), bF = mk(fv);
+    // solid view data: layer heights from the layer z steps, one value per segment
+    let sv = null;
+    if (S3) {
+      const lz = new Float32Array(d.layers + 1).fill(1e9);
+      for (let i = 0; i < n; i++) { const z = d.pos[i * 6 + 5] / 50, L = d.lay[i]; if (z < lz[L]) lz[L] = z; }
+      const lh = new Float32Array(d.layers + 1);
+      let prev = 0;
+      for (let L = 0; L <= d.layers; L++) { if (lz[L] > 1e8) { lh[L] = 0.2; continue; } lh[L] = Math.min(0.6, Math.max(0.06, lz[L] - prev)); prev = lz[L]; }
+      const hv = new Float32Array(n);
+      for (let i = 0; i < n; i++) hv[i] = lh[d.lay[i]];
+      const t = boxTemplate();
+      sv = {tv: mk(t.v), tn: mk(t.n), count: t.count, h: mk(hv), l: mk(new Float32Array(d.lay)), f: mk(new Float32Array(d.ft)),
+        loc: {tv: gl.getAttribLocation(S3, "tv"), tn: gl.getAttribLocation(S3, "tn"), a: gl.getAttribLocation(S3, "a"), b: gl.getAttribLocation(S3, "b"),
+          f: gl.getAttribLocation(S3, "f"), l: gl.getAttribLocation(S3, "l"), hh: gl.getAttribLocation(S3, "hh"),
+          mvp: gl.getUniformLocation(S3, "mvp"), vis: gl.getUniformLocation(S3, "vis"), col: gl.getUniformLocation(S3, "col"),
+          top: gl.getUniformLocation(S3, "top"), wid: gl.getUniformLocation(S3, "wid"), ld: gl.getUniformLocation(S3, "ld"), ld2: gl.getUniformLocation(S3, "ld2")}};
+    }
 
     // bed: 256 mm plate with a 16 mm grid and a darker border
     const bed = [], S = 256;
@@ -408,6 +468,32 @@ void main(){
       gl.disable(gl.BLEND);
       gl.disableVertexAttribArray(loc.bp);
 
+      if (sv) {
+        const L = sv.loc, count = layStart[Math.min(d.layers, Math.max(0, top))];
+        gl.useProgram(S3);
+        gl.uniformMatrix4fv(L.mvp, false, mvp);
+        gl.uniform1fv(L.vis, vis); gl.uniform3fv(L.col, cols);
+        gl.uniform1f(L.top, top >= d.layers ? 1e9 : top - 1);
+        gl.uniform1f(L.wid, 0.44);
+        const ed = norm(sub(e, cam.ctr));
+        gl.uniform3fv(L.ld, norm([ed[0] * 0.6, ed[1] * 0.6, ed[2] * 0.6 + 0.8]));
+        gl.uniform3fv(L.ld2, norm([-ed[1], ed[0], 0.3]));
+        const att = (loc, buf, size, type, stride, off, div) => {
+          if (loc < 0) return;
+          gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc);
+          gl.vertexAttribPointer(loc, size, type, false, stride, off); inst.vertexAttribDivisorANGLE(loc, div);
+        };
+        att(L.tv, sv.tv, 3, gl.FLOAT, 0, 0, 0);
+        att(L.tn, sv.tn, 2, gl.FLOAT, 0, 0, 0);
+        att(L.a, bPos, 3, gl.SHORT, 12, 0, 1);
+        att(L.b, bPos, 3, gl.SHORT, 12, 6, 1);
+        att(L.f, sv.f, 1, gl.FLOAT, 0, 0, 1);
+        att(L.l, sv.l, 1, gl.FLOAT, 0, 0, 1);
+        att(L.hh, sv.h, 1, gl.FLOAT, 0, 0, 1);
+        if (count) inst.drawArraysInstancedANGLE(gl.TRIANGLES, 0, sv.count, count);
+        for (const k of ["tv", "tn", "a", "b", "f", "l", "hh"]) if (L[k] >= 0) { inst.vertexAttribDivisorANGLE(L[k], 0); gl.disableVertexAttribArray(L[k]); }
+        return;
+      }
       gl.useProgram(P);
       gl.uniformMatrix4fv(loc.mvp, false, mvp); gl.uniformMatrix4fv(loc.mv, false, mv);
       gl.uniform1fv(loc.vis, vis); gl.uniform3fv(loc.col, cols);

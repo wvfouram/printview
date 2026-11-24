@@ -352,8 +352,9 @@ def plate_png(local_path, index):
     plate 3, say, has no plate_1 picture)."""
     with zipfile.ZipFile(local_path) as z:
         names = z.namelist()
-        if index == 0:
-            nums = sorted(int(m.group(1)) for m in (re.match(r"Metadata/plate_(\d+)\.png$", n) for n in names) if m)
+        if index == 0:   # the plate that's actually sliced (a project file has pictures of every plate)
+            sliced = sorted(int(m.group(1)) for m in (re.match(r"Metadata/plate_(\d+)\.gcode$", n) for n in names) if m)
+            nums = sliced or sorted(int(m.group(1)) for m in (re.match(r"Metadata/plate_(\d+)\.png$", n) for n in names) if m)
             index = nums[0] if nums else 1
         for n in (f"Metadata/plate_{index}.png", f"Metadata/plate_no_light_{index}.png", f"Metadata/top_{index}.png"):
             if n in names:
