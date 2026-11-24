@@ -60,7 +60,7 @@
       var j = {};
       try { j = JSON.parse(x.responseText); } catch (e) { }
       if (x.status === 200 && j.ok) {
-        show("Sent. " + j.name + " is on the printer's SD card. Open it in PrintView to pick the filament slots and start, schedule or queue it.", false,
+        show("Sent. The Pi is copying " + j.name + " to the printer's SD card now (a big file can take a few minutes). Then open it in PrintView to pick the filament slots and start, schedule or queue it.", false,
           [["Open in PrintView", function () { location.href = BASE + "/?open=" + encodeURIComponent(j.path); }, true]]);
       } else if (x.status === 401) {
         show("Sending to the printer needs the general code. Open PrintView, tap Enter code, then come back and send again.", true,

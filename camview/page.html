@@ -510,9 +510,24 @@ function pwUpload(url, extraHeaders, onDone, statusEl) {
     const tag = () => files.length > 1 ? " (" + (i + 1) + " of " + files.length + ")" : "";
     const next = () => {
       if (i >= files.length) {
-        statusEl.textContent = (files.length > 1 ? "Uploaded " + ok + " of " + files.length + " files" : (ok ? "Uploaded " + files[0].name : "Upload failed")) +
-          (ok ? " - they're at the top of the SD list" : "") + (failed.length ? ". Failed: " + failed.join(", ") : "") + (skipped ? ". Skipped " + skipped + " file(s) that aren't .3mf or .gcode" : "");
-        if (ok && onDone) onDone({ok: true, count: ok});
+        const extra = (failed.length ? ". Failed: " + failed.join(", ") : "") + (skipped ? ". Skipped " + skipped + " file(s) that aren't .3mf or .gcode" : "");
+        if (!ok) { statusEl.textContent = "Upload failed" + extra; return; }
+        const t0 = Date.now() / 1000;
+        const watch = async () => {
+          let j = null;
+          try { const r = await fetch(url + "s", {credentials: "same-origin", cache: "no-store"}); j = await r.json(); } catch (e) {}
+          if (!j || !j.ok) { statusEl.textContent = "Sent " + ok + " file(s) to the Pi. It copies them to the printer in the background" + extra; onDone && onDone({ok: true}); return; }
+          const bad = (j.failed || []).filter(x => x.t >= t0 - 5).map(x => x.name + " (" + x.error + ")");
+          if (j.current) {
+            const left = (j.waiting || []).length;
+            statusEl.textContent = "On the Pi. Copying " + j.current + " to the printer" + (left ? " - " + left + " more waiting" : "") + "... You can leave this page." + extra;
+            setTimeout(watch, 3000);
+          } else {
+            statusEl.textContent = "Done: " + ok + " file(s) on the printer's SD card - at the top of the list" + (bad.length ? ". Couldn't copy: " + bad.join(", ") : "") + extra;
+            onDone && onDone({ok: true, count: ok});
+          }
+        };
+        watch();
         return;
       }
       const f = files[i], x = new XMLHttpRequest();

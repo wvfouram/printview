@@ -165,6 +165,7 @@ def build_app():
     app.router.add_get("/api/ping", lambda r: web.json_response({"ok": True, "remote": bool(r.get("remote"))}))
     app.router.add_get("/api/files", api_files)
     app.router.add_post("/api/upload", api_upload)
+    app.router.add_get("/api/uploads", api_uploads)
     app.router.add_get("/api/files/download", api_file_download)
     app.router.add_post("/api/files/delete", api_file_delete)
     app.router.add_get("/api/trash", api_trash)
@@ -225,6 +226,7 @@ def build_app():
         detector.start()
         app["automation"].start()
         app["loop"] = asyncio.get_running_loop()
+        _kick_uploads(app)          # finish any copies a restart interrupted
         if app["upnp"]:
             app["upnp"].start()
         log.info("PrintWatch up - printer %s (%s)", ip, serial[-4:].rjust(len(serial), "*"))
@@ -960,34 +962,94 @@ UPLOAD_MAX = 500 * 1024 * 1024
 
 
 async def api_upload(request):
-    """Raw file body; ?name=part.gcode.3mf. Saved to the printer's SD card, ready in Print from SD."""
+    """Raw file body; ?name=part.gcode.3mf. Saved on the Pi first (fast), then the Pi copies it to the
+    printer's SD card in the background, one file at a time. GET /api/uploads shows how that's going."""
     name = os.path.basename((request.query.get("name") or "").replace("\\", "/")).strip()
     name = re.sub(r'[^\w .()+\-]', "_", name)[:120]
     if not re.search(r"\.(3mf|gcode)$", name, re.I):
         return web.json_response({"ok": False, "error": "Only .gcode.3mf, .3mf or .gcode files"}, status=400)
-    tmpdir = os.path.join(env("DATA_DIR", "/data"), "uploads")
-    os.makedirs(tmpdir, exist_ok=True)
-    tmp = os.path.join(tmpdir, "incoming.part")
+    qdir = _upload_dir()
+    tmp = os.path.join(qdir, f".incoming-{time.time_ns()}.part")
     size = 0
     try:
         with open(tmp, "wb") as out:
             async for chunk in request.content.iter_chunked(65536):
                 size += len(chunk)
                 if size > UPLOAD_MAX:
-                    return web.json_response({"ok": False, "error": "File too big (500 MB max)"}, status=413)
+                    raise ValueError("File too big (500 MB max)")
                 out.write(chunk)
         if size < 100:
-            return web.json_response({"ok": False, "error": "Empty file"}, status=400)
-        await _run(request.app["sd"].upload, tmp, name)
+            raise ValueError("Empty file")
+        final = os.path.join(qdir, f"{time.time_ns()}__{name}")
+        os.replace(tmp, final)
     except Exception as e:  # noqa: BLE001
-        return web.json_response({"ok": False, "error": f"Upload failed: {e}"}, status=502)
-    finally:
         try:
             os.remove(tmp)
         except OSError:
             pass
-    request.app["events"].add("cmd", f"Uploaded {name} ({size // 1024} KB)")
-    return web.json_response({"ok": True, "name": name, "path": "/" + name, "size": size})
+        return web.json_response({"ok": False, "error": str(e)}, status=413 if "big" in str(e) else 400)
+    request.app["events"].add("cmd", f"Received {name} ({size // 1024} KB), sending it to the printer")
+    _kick_uploads(request.app)
+    return web.json_response({"ok": True, "queued": True, "name": name, "path": "/" + name, "size": size})
+
+
+def _upload_dir():
+    d = os.path.join(env("DATA_DIR", "/data"), "uploads", "queue")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _upload_queue():
+    d = _upload_dir()
+    return sorted(n for n in os.listdir(d) if "__" in n and not n.startswith("."))
+
+
+def _kick_uploads(app):
+    t = app.get("upload_task")
+    if t is None or t.done():
+        app["upload_task"] = asyncio.ensure_future(_upload_worker(app))
+
+
+async def _upload_worker(app):
+    """Copies queued files from the Pi to the printer's SD card, oldest first. Files stay on the Pi
+    until they're on the card, so nothing is lost if the printer or the Pi restarts."""
+    st = app.setdefault("upload_state", {"current": None, "done": [], "failed": []})
+    while True:
+        q = _upload_queue()
+        if not q:
+            st["current"] = None
+            return
+        fn = q[0]
+        name = fn.split("__", 1)[1]
+        path = os.path.join(_upload_dir(), fn)
+        st["current"] = name
+        err = None
+        for attempt in range(3):
+            try:
+                await _run(app["sd"].upload, path, name)
+                err = None
+                break
+            except Exception as e:  # noqa: BLE001
+                err = str(e)[:160]
+                await asyncio.sleep(15)
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        if err:
+            st["failed"] = (st["failed"] + [{"name": name, "error": err, "t": int(time.time())}])[-20:]
+            app["events"].add("cmd", f"Couldn't copy {name} to the printer: {err}")
+        else:
+            st["done"] = (st["done"] + [{"name": name, "t": int(time.time())}])[-20:]
+            app["events"].add("cmd", f"Copied {name} to the printer's SD card")
+
+
+async def api_uploads(request):
+    st = request.app.get("upload_state") or {"current": None, "done": [], "failed": []}
+    q = [n.split("__", 1)[1] for n in _upload_queue()]
+    cur = st.get("current")
+    return web.json_response({"ok": True, "current": cur, "waiting": [n for n in q if n != cur] if cur else q,
+                              "done": st["done"], "failed": st["failed"]})
 
 
 async def _known_file(app, path):

@@ -246,10 +246,50 @@ class SDCard:
         self.invalidate()
 
     def upload(self, local, name):
-        """Copy a local file onto the root of the printer's SD card."""
-        with open(local, "rb") as fp:
-            self._session(lambda f: f.storbinary(f"STOR /{name}", fp, blocksize=65536), wait=120)
+        """Copy a local file onto the root of the printer's SD card.
+        The printer can take a long time to confirm a big file after the last byte arrives, so wait up to
+        5 minutes for its reply, and if it still doesn't answer, check the file's size on the card instead."""
+        size = os.path.getsize(local)
+
+        def put(f):
+            f.voidcmd("TYPE I")
+            with open(local, "rb") as fp:
+                conn = f.transfercmd(f"STOR /{name}")
+                try:
+                    while True:
+                        buf = fp.read(65536)
+                        if not buf:
+                            break
+                        conn.sendall(buf)
+                    try:
+                        conn.unwrap()
+                    except Exception:  # noqa: BLE001
+                        pass
+                finally:
+                    conn.close()
+            f.sock.settimeout(300)
+            try:
+                f.voidresp()
+            except (TimeoutError, OSError):
+                return False
+            return True
+
+        confirmed = self._session(put, wait=600)
         self.invalidate()
+        if not confirmed:
+            def check(f):
+                f.voidcmd("TYPE I")
+                return f.size(f"/{name}")
+            got = None
+            for _ in range(6):
+                try:
+                    got = self._session(check, wait=120)
+                    if got == size:
+                        return
+                except Exception:  # noqa: BLE001
+                    pass
+                time.sleep(10)
+            raise RuntimeError(f"the printer didn't confirm the file ({got or 0} of {size} bytes on the card)")
 
     def _prune(self, keep_bytes=500_000_000):
         files = sorted((os.path.join(self.cache_dir, n) for n in os.listdir(self.cache_dir)),
