@@ -1033,9 +1033,15 @@ async def _upload_worker(app):
                 err = str(e)[:160]
                 await asyncio.sleep(15)
         try:
-            os.remove(path)
+            if err:
+                os.remove(path)
+            else:
+                await _run(app["sd"].adopt, path, "/" + name)
         except OSError:
-            pass
+            try:
+                os.remove(path)
+            except OSError:
+                pass
         if err:
             st["failed"] = (st["failed"] + [{"name": name, "error": err, "t": int(time.time())}])[-20:]
             app["events"].add("cmd", f"Couldn't copy {name} to the printer: {err}")
@@ -1150,7 +1156,7 @@ async def api_file_info(request):
 async def api_file_plate(request):
     path, idx = request.query.get("path", ""), int(request.query.get("plate", "1"))
     try:
-        local, _ = await _plates(request.app, path)
+        local = await _run(request.app["sd"].fetch, path)
         png = await _run(sd.plate_png, local, idx)
     except Exception as e:  # noqa: BLE001
         return _sd_error(e)

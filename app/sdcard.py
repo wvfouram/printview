@@ -211,6 +211,13 @@ class SDCard:
         ext = ".3mf" if path.lower().endswith(".3mf") else os.path.splitext(path)[1]
         return os.path.join(self.cache_dir, h + ext)
 
+    def adopt(self, local, path):
+        """Keep a file the Pi just copied to the card as the local cache copy, so previews and
+        plate info for it show straight away without downloading it back from the printer."""
+        dst = self._cache_path(path, os.path.getsize(local))
+        os.replace(local, dst)
+        self._prune()
+
     def fetch(self, path, size=None):
         """Download a file into the cache (once) and return the local path."""
         if size is None:
@@ -341,9 +348,15 @@ def parse_3mf(local_path):
 
 
 def plate_png(local_path, index):
+    """Picture of one plate. index 0 = the first plate that has a picture (a file sliced from only
+    plate 3, say, has no plate_1 picture)."""
     with zipfile.ZipFile(local_path) as z:
+        names = z.namelist()
+        if index == 0:
+            nums = sorted(int(m.group(1)) for m in (re.match(r"Metadata/plate_(\d+)\.png$", n) for n in names) if m)
+            index = nums[0] if nums else 1
         for n in (f"Metadata/plate_{index}.png", f"Metadata/plate_no_light_{index}.png", f"Metadata/top_{index}.png"):
-            if n in z.namelist():
+            if n in names:
                 return z.read(n)
     return None
 
