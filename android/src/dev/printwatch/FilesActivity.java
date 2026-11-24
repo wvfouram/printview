@@ -26,7 +26,7 @@ public class FilesActivity extends Base {
         refresh.setMinHeight(Ui.dp(this, 44));
         refresh.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { load(true); } });
         p.addView(refresh);
-        Button up = Ui.button(this, "Upload a print file", Ui.ACCENT, Ui.BG, 0);
+        Button up = Ui.button(this, "Upload print files", Ui.ACCENT, Ui.BG, 0);
         up.setTextSize(14);
         up.setMinHeight(Ui.dp(this, 44));
         up.setOnClickListener(new View.OnClickListener() {
@@ -34,6 +34,7 @@ public class FilesActivity extends Base {
                 Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 it.addCategory(Intent.CATEGORY_OPENABLE);
                 it.setType("*/*");
+                it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 startActivityForResult(it, 41);
             }
         });
@@ -44,7 +45,7 @@ public class FilesActivity extends Base {
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         p.addView(list);
-        note(p, "Upload a sliced .gcode.3mf from your phone (works away from home too), or send from Bambu Studio / OrcaSlicer at home. New files appear at the top. Press and hold a file to download or delete it.");
+        note(p, "Upload sliced .gcode.3mf files from your phone (pick several at once) (works away from home too), or send from Bambu Studio / OrcaSlicer at home. New files appear at the top. Press and hold a file to download or delete it.");
         load(false);
     }
 
@@ -55,74 +56,88 @@ public class FilesActivity extends Base {
             download(data.getData(), pending);
             return;
         }
-        if (req != 41 || res != RESULT_OK || data == null || data.getData() == null) return;
-        final android.net.Uri uri = data.getData();
-        String name = "upload.gcode.3mf";
-        long size = -1;
-        android.database.Cursor cu = getContentResolver().query(uri, null, null, null, null);
-        if (cu != null) {
-            if (cu.moveToFirst()) {
-                int ni = cu.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
-                int si = cu.getColumnIndex(android.provider.OpenableColumns.SIZE);
-                if (ni >= 0) name = cu.getString(ni);
-                if (si >= 0 && !cu.isNull(si)) size = cu.getLong(si);
-            }
-            cu.close();
-        }
-        if (!name.toLowerCase(java.util.Locale.US).matches(".*\\.(3mf|gcode)$")) {
-            status.setText("Pick a .gcode.3mf, .3mf or .gcode file");
-            return;
-        }
-        final String fname = name;
-        final long fsize = size;
-        status.setText("Uploading " + fname + "...");
+        if (req != 41 || res != RESULT_OK || data == null) return;
+        final java.util.ArrayList<android.net.Uri> uris = new java.util.ArrayList<>();
+        if (data.getClipData() != null) {
+            for (int k = 0; k < data.getClipData().getItemCount(); k++) uris.add(data.getClipData().getItemAt(k).getUri());
+        } else if (data.getData() != null) uris.add(data.getData());
+        if (uris.isEmpty()) return;
+        status.setText("Uploading...");
         new Thread(new Runnable() {
             public void run() {
-                String msg;
-                java.net.HttpURLConnection h = null;
-                try {
-                    h = Api.stream(FilesActivity.this, "/api/upload?name=" + java.net.URLEncoder.encode(fname, "UTF-8"));
-                    h.setReadTimeout(300000);
-                    h.setDoOutput(true);
-                    h.setRequestMethod("POST");
-                    h.setRequestProperty("Content-Type", "application/octet-stream");
-                    if (fsize > 0) h.setFixedLengthStreamingMode(fsize); else h.setChunkedStreamingMode(65536);
-                    java.io.InputStream in = getContentResolver().openInputStream(uri);
-                    java.io.OutputStream out = h.getOutputStream();
-                    byte[] buf = new byte[65536];
-                    long sent = 0, last = 0;
-                    int n;
-                    while ((n = in.read(buf)) > 0) {
-                        out.write(buf, 0, n);
-                        sent += n;
-                        if (fsize > 0 && System.currentTimeMillis() - last > 300) {
-                            last = System.currentTimeMillis();
-                            final int pc = (int) (sent * 100 / fsize);
-                            ui.post(new Runnable() { public void run() { status.setText("Uploading " + fname + " - " + pc + "%"); } });
+                int ok = 0, skipped = 0;
+                StringBuilder failed = new StringBuilder();
+                for (int k = 0; k < uris.size(); k++) {
+                    android.net.Uri uri = uris.get(k);
+                    String name = "upload.gcode.3mf";
+                    long size = -1;
+                    android.database.Cursor cu = getContentResolver().query(uri, null, null, null, null);
+                    if (cu != null) {
+                        if (cu.moveToFirst()) {
+                            int ni = cu.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                            int si = cu.getColumnIndex(android.provider.OpenableColumns.SIZE);
+                            if (ni >= 0) name = cu.getString(ni);
+                            if (si >= 0 && !cu.isNull(si)) size = cu.getLong(si);
                         }
+                        cu.close();
                     }
-                    in.close();
-                    out.close();
-                    int code = h.getResponseCode();
-                    java.io.InputStream rs = code >= 400 ? h.getErrorStream() : h.getInputStream();
-                    String body = "";
-                    if (rs != null) {
-                        java.util.Scanner sc = new java.util.Scanner(rs, "UTF-8").useDelimiter("\\A");
-                        body = sc.hasNext() ? sc.next() : "";
-                        rs.close();
-                    }
-                    JSONObject j = body.isEmpty() ? new JSONObject() : new JSONObject(body);
-                    msg = code == 200 && j.optBoolean("ok") ? "Uploaded " + j.optString("name") + " - it's at the top of the list"
-                            : "Upload failed: " + j.optString("error", "HTTP " + code);
-                } catch (Exception e) {
-                    msg = "Upload failed: " + e.getMessage();
-                } finally {
-                    if (h != null) h.disconnect();
+                    if (!name.toLowerCase(java.util.Locale.US).matches(".*\\.(3mf|gcode)$")) { skipped++; continue; }
+                    String tag = uris.size() > 1 ? " (" + (k + 1) + " of " + uris.size() + ")" : "";
+                    String err = uploadOne(uri, name, size, tag);
+                    if (err == null) ok++; else failed.append(failed.length() > 0 ? ", " : "").append(name).append(" (").append(err).append(")");
                 }
+                String msg = (uris.size() > 1 ? "Uploaded " + ok + " of " + uris.size() + " files" : (ok > 0 ? "Uploaded" : "Upload failed"))
+                        + (ok > 0 ? " - new files are at the top of the list" : "")
+                        + (failed.length() > 0 ? ". Failed: " + failed : "")
+                        + (skipped > 0 ? ". Skipped " + skipped + " file(s) that aren't .3mf or .gcode" : "");
                 final String m = msg;
                 ui.post(new Runnable() { public void run() { if (!isFinishing()) { android.widget.Toast.makeText(FilesActivity.this, m, android.widget.Toast.LENGTH_LONG).show(); load(true); } } });
             }
         }).start();
+    }
+
+    /** Uploads one file; returns null when it worked, or the error. Runs on a background thread. */
+    private String uploadOne(android.net.Uri uri, final String fname, final long fsize, final String tag) {
+        ui.post(new Runnable() { public void run() { status.setText("Uploading " + fname + tag + "..."); } });
+        java.net.HttpURLConnection h = null;
+        try {
+            h = Api.stream(FilesActivity.this, "/api/upload?name=" + java.net.URLEncoder.encode(fname, "UTF-8"));
+            h.setReadTimeout(300000);
+            h.setDoOutput(true);
+            h.setRequestMethod("POST");
+            h.setRequestProperty("Content-Type", "application/octet-stream");
+            if (fsize > 0) h.setFixedLengthStreamingMode(fsize); else h.setChunkedStreamingMode(65536);
+            java.io.InputStream in = getContentResolver().openInputStream(uri);
+            java.io.OutputStream out = h.getOutputStream();
+            byte[] buf = new byte[65536];
+            long sent = 0, last = 0;
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+                sent += n;
+                if (fsize > 0 && System.currentTimeMillis() - last > 300) {
+                    last = System.currentTimeMillis();
+                    final int pc = (int) (sent * 100 / fsize);
+                    ui.post(new Runnable() { public void run() { status.setText("Uploading " + fname + tag + " - " + pc + "%"); } });
+                }
+            }
+            in.close();
+            out.close();
+            int code = h.getResponseCode();
+            java.io.InputStream rs = code >= 400 ? h.getErrorStream() : h.getInputStream();
+            String body = "";
+            if (rs != null) {
+                java.util.Scanner sc = new java.util.Scanner(rs, "UTF-8").useDelimiter("\\A");
+                body = sc.hasNext() ? sc.next() : "";
+                rs.close();
+            }
+            JSONObject j = body.isEmpty() ? new JSONObject() : new JSONObject(body);
+            return code == 200 && j.optBoolean("ok") ? null : j.optString("error", "HTTP " + code);
+        } catch (Exception e) {
+            return String.valueOf(e.getMessage());
+        } finally {
+            if (h != null) h.disconnect();
+        }
     }
 
     private void load(boolean refresh) {

@@ -289,24 +289,37 @@ function renderHms(h){
 
 function pwUpload(url, extraHeaders, onDone, statusEl) {
   const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".3mf,.gcode";
+  inp.type = "file"; inp.accept = ".3mf,.gcode"; inp.multiple = true;
   inp.onchange = () => {
-    const f = inp.files[0]; if (!f) return;
-    if (!/\.(3mf|gcode)$/i.test(f.name)) { statusEl.textContent = "Pick a .gcode.3mf, .3mf or .gcode file"; return; }
-    const x = new XMLHttpRequest();
-    x.open("POST", url + "?name=" + encodeURIComponent(f.name));
-    x.withCredentials = true;
-    x.setRequestHeader("Content-Type", "application/octet-stream");
-    for (const k in extraHeaders) x.setRequestHeader(k, extraHeaders[k]);
-    x.upload.onprogress = e => { if (e.lengthComputable) statusEl.textContent = "Uploading " + f.name + " - " + Math.round(e.loaded / e.total * 100) + "%"; };
-    x.onload = () => {
-      let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
-      if (x.status === 200 && j.ok) { statusEl.textContent = "Uploaded " + j.name + " - it's at the top of the SD list"; onDone && onDone(j); }
-      else statusEl.textContent = "Upload failed: " + (j.error || ("HTTP " + x.status));
+    const all = Array.from(inp.files || []);
+    const files = all.filter(f => /\.(3mf|gcode)$/i.test(f.name));
+    if (!files.length) { if (all.length) statusEl.textContent = "Pick .gcode.3mf, .3mf or .gcode files"; return; }
+    const skipped = all.length - files.length, failed = [];
+    let i = 0, ok = 0;
+    const tag = () => files.length > 1 ? " (" + (i + 1) + " of " + files.length + ")" : "";
+    const next = () => {
+      if (i >= files.length) {
+        statusEl.textContent = (files.length > 1 ? "Uploaded " + ok + " of " + files.length + " files" : (ok ? "Uploaded " + files[0].name : "Upload failed")) +
+          (ok ? " - they're at the top of the SD list" : "") + (failed.length ? ". Failed: " + failed.join(", ") : "") + (skipped ? ". Skipped " + skipped + " file(s) that aren't .3mf or .gcode" : "");
+        if (ok && onDone) onDone({ok: true, count: ok});
+        return;
+      }
+      const f = files[i], x = new XMLHttpRequest();
+      x.open("POST", url + "?name=" + encodeURIComponent(f.name));
+      x.withCredentials = true;
+      x.setRequestHeader("Content-Type", "application/octet-stream");
+      for (const k in extraHeaders) x.setRequestHeader(k, extraHeaders[k]);
+      x.upload.onprogress = e => { if (e.lengthComputable) statusEl.textContent = "Uploading " + f.name + tag() + " - " + Math.round(e.loaded / e.total * 100) + "%"; };
+      x.onload = () => {
+        let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
+        if (x.status === 200 && j.ok) ok++; else failed.push(f.name + " (" + (j.error || ("HTTP " + x.status)) + ")");
+        i++; next();
+      };
+      x.onerror = () => { failed.push(f.name + " (connection lost)"); i++; next(); };
+      statusEl.textContent = "Uploading " + f.name + tag() + " - 0%";
+      x.send(f);
     };
-    x.onerror = () => statusEl.textContent = "Upload failed: connection lost";
-    statusEl.textContent = "Uploading " + f.name + " - 0%";
-    x.send(f);
+    next();
   };
   inp.click();
 }
