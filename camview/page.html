@@ -297,17 +297,21 @@ void main(){
   vec3 d = len > 0.0001 ? vec3(dxy / len, 0.0) : vec3(1.0, 0.0, 0.0);
   vec3 s = vec3(-d.y, d.x, 0.0);
   float h = clamp(hh, 0.04, 0.8), w = wid;
+  if (fi != 0) { w *= 0.86; h *= 0.92; }      // outer wall drawn a hair bigger, so it covers what's behind it cleanly
   vec3 base = mix(A - d * w * 0.5, B + d * w * 0.5, tv.x);
   vec3 P = base + s * (tv.y * w * 0.5) + vec3(0.0, 0.0, (tv.z - 1.0) * 0.5 * h);
   gl_Position = mvp * vec4(P, 1.0);
-  n = normalize(s * tn.x + d * tn.y + vec3(0.0, 0.0, tv.z > 0.0 && abs(tn.x) + abs(tn.y) < 0.5 ? 1.0 : 0.0));
+  // rounded bead: the top face's normal leans out toward each edge and the sides lean up a little,
+  // so neighbouring layers shade smoothly instead of flickering between "top" and "side"
+  if (abs(tn.x) + abs(tn.y) < 0.5) n = normalize(s * (tv.y * 0.9) + vec3(0.0, 0.0, 0.7));
+  else n = normalize(s * tn.x + d * tn.y + vec3(0.0, 0.0, 0.35 * (tv.z > 0.0 ? 1.0 : -0.6)));
   if (l > top - 0.5) cc = mix(cc, vec3(1.0), 0.3);
-  c = cc * (0.95 + 0.05 * mod(l, 2.0));      // faint layer lines, like the real part
+  c = cc;
 }`;
   const SFS = `precision mediump float; varying vec3 c; varying vec3 n; uniform vec3 ld; uniform vec3 ld2;
 void main(){
   vec3 N = normalize(n);
-  float k = 0.38 + 0.52 * max(dot(N, ld), 0.0) + 0.22 * max(dot(N, ld2), 0.0);
+  float k = 0.30 + 0.62 * max(dot(N, ld), 0.0) + 0.18 * max(dot(N, ld2), 0.0);
   gl_FragColor = vec4(c * k, 1.0);
 }`;
   // template box: x = along the move (0/1), y = side (-1/1), z = bottom/top (-1/1); normal (side, along)
@@ -452,7 +456,8 @@ void main(){
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.enable(gl.DEPTH_TEST);
       const e = eye(), mv = look(e, cam.ctr, [0, 0, 1]);
-      const near = Math.max(0.5, cam.dist - rad * 4), far = cam.dist + rad * 4 + 400;
+      // tight near/far keeps depth precise (a loose range made walls speckle and show through)
+      const near = Math.max(cam.dist * 0.02, cam.dist - rad * 1.6), far = cam.dist + rad * 1.6 + 380;
       const mvp = mul(persp(FOV, w / h, near, far), mv);
       const light = (c[0] + c[1] + c[2]) / 3 > 0.5;
       gl.useProgram(B);
@@ -474,7 +479,7 @@ void main(){
         gl.uniformMatrix4fv(L.mvp, false, mvp);
         gl.uniform1fv(L.vis, vis); gl.uniform3fv(L.col, cols);
         gl.uniform1f(L.top, top >= d.layers ? 1e9 : top - 1);
-        gl.uniform1f(L.wid, 0.44);
+        gl.uniform1f(L.wid, 0.5);
         const ed = norm(sub(e, cam.ctr));
         gl.uniform3fv(L.ld, norm([ed[0] * 0.6, ed[1] * 0.6, ed[2] * 0.6 + 0.8]));
         gl.uniform3fv(L.ld2, norm([-ed[1], ed[0], 0.3]));
