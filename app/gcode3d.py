@@ -11,6 +11,7 @@ import gzip
 from array import array
 import hashlib
 import io
+import math
 import os
 import re
 import struct
@@ -18,11 +19,12 @@ import zipfile
 
 import numpy as np
 
-MAX_SEG = 450_000
+MAX_SEG = 1_000_000
 SCALE = 50.0
 FEAT = [("outer wall", 0), ("inner wall", 1), ("overhang wall", 0), ("sparse infill", 2), ("internal solid infill", 2),
         ("top surface", 3), ("bottom surface", 3), ("bridge", 3), ("support", 4), ("gap infill", 1), ("ironing", 3)]
-_num = re.compile(r"([XYZEF])(-?\d*\.?\d+)")
+_num = re.compile(r"([XYZEFIJR])(-?\d*\.?\d+)")
+VERSION = 2   # bump when the toolpath output changes, so old cached ones are rebuilt
 
 
 def _feature(line):
@@ -36,7 +38,7 @@ def _feature(line):
 def build(local_3mf, plate, cache_dir):
     """Returns the PV3D bytes gzipped (cached on disk), or None if the plate has no G-code."""
     st = os.stat(local_3mf)
-    key = hashlib.sha1(f"{local_3mf}|{plate}|{int(st.st_mtime)}|{st.st_size}".encode()).hexdigest()[:20] + ".pv3d"
+    key = hashlib.sha1(f"v{VERSION}|{local_3mf}|{plate}|{int(st.st_mtime)}|{st.st_size}".encode()).hexdigest()[:20] + ".pv3d"
     out = os.path.join(cache_dir, key)
     if os.path.exists(out):
         with open(out, "rb") as f:
@@ -50,6 +52,42 @@ def build(local_3mf, plate, cache_dir):
     if res is None:
         return None
     return _pack(*res, out=out, cache_dir=cache_dir)
+
+
+def _arc(x0, y0, x1, y1, i, j, r, cw):
+    """Split a G2 (clockwise) / G3 arc into short straight pieces (about 0.4 mm each)."""
+    if i is None and j is None:
+        if r is None:
+            return [(x0, y0, x1, y1)]
+        dx, dy = x1 - x0, y1 - y0
+        d = math.hypot(dx, dy)
+        if d == 0 or abs(r) < d / 2:
+            return [(x0, y0, x1, y1)]
+        h = math.sqrt(r * r - d * d / 4) * (1 if (r > 0) != cw else -1)
+        cx, cy = x0 + dx / 2 - h * dy / d, y0 + dy / 2 + h * dx / d
+    else:
+        cx, cy = x0 + (i or 0.0), y0 + (j or 0.0)
+    rad = math.hypot(x0 - cx, y0 - cy)
+    if rad < 1e-6:
+        return [(x0, y0, x1, y1)]
+    a0, a1 = math.atan2(y0 - cy, x0 - cx), math.atan2(y1 - cy, x1 - cx)
+    sweep = a1 - a0
+    if cw:
+        if sweep >= -1e-9:
+            sweep -= 2 * math.pi
+    elif sweep <= 1e-9:
+        sweep += 2 * math.pi
+    n = max(2, min(128, int(abs(sweep) * rad / 0.4) + 1))
+    out, px, py = [], x0, y0
+    for k in range(1, n + 1):
+        if k == n:
+            qx, qy = x1, y1
+        else:
+            a = a0 + sweep * k / n
+            qx, qy = cx + rad * math.cos(a), cy + rad * math.sin(a)
+        out.append((px, py, qx, qy))
+        px, py = qx, qy
+    return out
 
 
 def _walk(fh):
@@ -79,6 +117,7 @@ def _walk(fh):
         elif line.startswith(("G1 ", "G0 ", "G1\t", "G0\t", "G2 ", "G3 ")):
             code = line.split(";", 1)[0]
             nx, ny, nz, ne = x, y, z_, None
+            ci = cj = cr = None
             for k, v in _num.findall(code):
                 v = float(v)
                 if k == "X":
@@ -89,10 +128,22 @@ def _walk(fh):
                     nz = v
                 elif k == "E":
                     ne = v
+                elif k == "I":
+                    ci = v
+                elif k == "J":
+                    cj = v
+                elif k == "R":
+                    cr = v
             extr = ne is not None and ((ne > 0) if rel_e else (ne > e))
             if ne is not None and not rel_e:
                 e = ne
-            if extr and (nx != x or ny != y) and code.startswith("G1"):
+            if extr and code.startswith(("G2", "G3")):
+                cw = code.startswith("G2")
+                for (ax, ay, bx, by) in _arc(x, y, nx, ny, ci, cj, cr, cw):
+                    pts.extend((ax, ay, nz, bx, by, nz))
+                    lay.append(min(max(layer, 0), 65535))
+                    fts.append(feat)
+            elif extr and (nx != x or ny != y):
                 pts.extend((x, y, nz, nx, ny, nz))
                 lay.append(min(max(layer, 0), 65535))
                 fts.append(feat)
