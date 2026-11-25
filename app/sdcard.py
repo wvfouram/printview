@@ -14,7 +14,9 @@ import ssl
 import threading
 import time
 import xml.etree.ElementTree as ET
+import struct
 import zipfile
+import zlib
 
 log = logging.getLogger("sdcard")
 
@@ -233,6 +235,99 @@ class SDCard:
         os.replace(tmp, local)
         self._prune()
         return local
+
+    # ---------------------------------------------------------- small reads
+    def read_range(self, path, offset, length):
+        """Read `length` bytes starting at `offset` without downloading the whole file (FTP REST)."""
+        def get(f):
+            f.voidcmd("TYPE I")
+            conn = f.transfercmd(f"RETR {path}", rest=offset)
+            buf = bytearray()
+            try:
+                while len(buf) < length:
+                    chunk = conn.recv(min(65536, length - len(buf)))
+                    if not chunk:
+                        break
+                    buf.extend(chunk)
+            finally:
+                conn.close()
+            try:
+                f.sock.settimeout(5)
+                f.voidresp()          # 226, or 426 because we stopped early: both fine
+            except Exception:  # noqa: BLE001
+                pass
+            return bytes(buf)
+        return self._session(get, wait=20)
+
+    def thumb(self, path, size):
+        """Picture of the sliced plate, read straight out of the file on the printer: only the zip index
+        and the picture are fetched (about 100 KB), not the whole file. Cached on the Pi."""
+        tdir = os.path.join(self.cache_dir, "thumbs")
+        os.makedirs(tdir, exist_ok=True)
+        key = os.path.join(tdir, hashlib.sha1(f"{path}:{size}".encode()).hexdigest()[:16] + ".png")
+        if os.path.exists(key):
+            return open(key, "rb").read()
+        local = self._cache_path(path, size)
+        if os.path.exists(local):
+            png = plate_png(local, 0)
+        else:
+            png = self._remote_plate_png(path, size)
+        if png:
+            with open(key, "wb") as f:
+                f.write(png)
+        return png
+
+    def _remote_plate_png(self, path, size):
+        if size < 22:
+            return None
+        tail_len = min(size, 65536 + 22)
+        tail = self.read_range(path, size - tail_len, tail_len)
+        e = tail.rfind(b"PK\x05\x06")
+        if e < 0:
+            return None
+        cd_size, cd_off = struct.unpack("<II", tail[e + 12:e + 20])
+        if cd_off >= size - tail_len:
+            cd = tail[cd_off - (size - tail_len):][:cd_size]
+        else:
+            cd = self.read_range(path, cd_off, cd_size)
+        entries, p = {}, 0
+        while p + 46 <= len(cd) and cd[p:p + 4] == b"PK\x01\x02":
+            method, = struct.unpack("<H", cd[p + 10:p + 12])
+            csize, usize = struct.unpack("<II", cd[p + 20:p + 28])
+            nl, xl, cl = struct.unpack("<HHH", cd[p + 28:p + 34])
+            lo, = struct.unpack("<I", cd[p + 42:p + 46])
+            name = cd[p + 46:p + 46 + nl].decode("utf-8", "replace")
+            if csize == 0xFFFFFFFF or lo == 0xFFFFFFFF:   # zip64: read its extra field
+                x = cd[p + 46 + nl:p + 46 + nl + xl]
+                q = 0
+                while q + 4 <= len(x):
+                    hid, hl = struct.unpack("<HH", x[q:q + 4])
+                    if hid == 1:
+                        vals = list(struct.unpack("<" + "Q" * (hl // 8), x[q + 4:q + 4 + (hl // 8) * 8]))
+                        if usize == 0xFFFFFFFF and vals:
+                            usize = vals.pop(0)
+                        if csize == 0xFFFFFFFF and vals:
+                            csize = vals.pop(0)
+                        if lo == 0xFFFFFFFF and vals:
+                            lo = vals.pop(0)
+                    q += 4 + hl
+            entries[name] = (method, csize, lo)
+            p += 46 + nl + xl + cl
+        sliced = sorted(int(m.group(1)) for m in (re.match(r"Metadata/plate_(\d+)\.gcode$", n) for n in entries) if m)
+        nums = sliced or sorted(int(m.group(1)) for m in (re.match(r"Metadata/plate_(\d+)\.png$", n) for n in entries) if m)
+        idx = nums[0] if nums else 1
+        ent = next((entries[n] for n in (f"Metadata/plate_{idx}.png", f"Metadata/plate_no_light_{idx}.png", f"Metadata/top_{idx}.png") if n in entries), None)
+        if not ent or ent[1] > 8_000_000:
+            return None
+        method, csize, lo = ent
+        hdr = self.read_range(path, lo, 30)
+        nl, xl = struct.unpack("<HH", hdr[26:30])
+        data = self.read_range(path, lo + 30 + nl + xl, csize)
+        if method == 0:
+            return data
+        if method == 8:
+            return zlib.decompress(data, -15)
+        return None
 
     def read_small(self, path, limit=2_000_000):
         """Read a small file (thumbnails) straight into memory."""

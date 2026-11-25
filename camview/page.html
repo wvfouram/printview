@@ -1444,7 +1444,7 @@ VIEWS.print = {
     const all = this.files || [], q = ($("#pQ").value || "").trim().toLowerCase(), so = $("#pSort").value;
     let files = all.filter(f => !q || f.title.toLowerCase().includes(q));
     files = files.slice().sort((a, b) => so === "old" ? b.order - a.order : so === "az" ? a.title.localeCompare(b.title) : so === "big" ? b.size - a.size : a.order - b.order);
-    $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=0&path=${encodeURIComponent(f.path)}" onerror="thumbRetry(this)"><div class="grow" style="min-width:0"><div class="two" style="font-weight:600" title="${esc(f.title)}">${esc(f.title)}</div>
+    $("#pList").innerHTML = files.length ? files.map((f, i) => `<div style="cursor:pointer" data-i="${i}"><img class="pthumb" loading="lazy" alt="" src="${BASE}/api/files/plate.png?plate=0&v=2&path=${encodeURIComponent(f.path)}" onerror="thumbRetry(this)"><div class="grow" style="min-width:0"><div class="two" style="font-weight:600" title="${esc(f.title)}">${esc(f.title)}</div>
         <div class="fa sm">${esc(f.date || "")} · ${(f.size / 1e6).toFixed(1)} MB</div></div>
         <a class="btn sm icon ro-ok" data-dl="${i}" href="${BASE}/api/files/download?path=${encodeURIComponent(f.path)}" download title="Download" aria-label="Download">${IC.dl}</a><span class="fa" style="padding-left:6px">›</span></div>`).join("")
       : `<div class="mu">${all.length ? "No file matches \"" + esc(q) + "\"." : "No sliced files found. Upload one, or send one from Bambu Studio or OrcaSlicer."}</div>`;

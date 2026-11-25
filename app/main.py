@@ -1156,8 +1156,16 @@ async def api_file_info(request):
 async def api_file_plate(request):
     path, idx = request.query.get("path", ""), int(request.query.get("plate", "1"))
     try:
-        local = await _run(request.app["sd"].fetch, path)
-        png = await _run(sd.plate_png, local, idx)
+        if idx == 0:      # list picture: read just the picture out of the file on the printer
+            size = next((m["size"] for m in await _run(request.app["sd"].models) if m["path"] == path), None)
+            if size is None:
+                raise web.HTTPNotFound()
+            png = await _run(request.app["sd"].thumb, path, size)
+        else:
+            local = await _run(request.app["sd"].fetch, path)
+            png = await _run(sd.plate_png, local, idx)
+    except web.HTTPException:
+        raise
     except Exception as e:  # noqa: BLE001
         return _sd_error(e)
     if not png:
