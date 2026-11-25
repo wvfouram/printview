@@ -291,12 +291,12 @@ textarea.code{width:100%;min-height:140px;font:11.5px/1.4 Consolas,ui-monospace,
   <div id="view" tabindex="0">
     <div id="bar"></div>
     <canvas id="c"></canvas>
-    <div id="drop"><b>Drop STL or STEP files here</b><span>or use Import in the toolbar</span></div>
+    <div id="drop"><b>Drop STL, STEP or 3MF files here</b><span>or use Import in the toolbar</span></div>
     <button id="collapse" data-tip="Collapse sidebar"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3 2 8l4 5M10 3l4 5-4 5"/></svg></button>
     <div id="status"></div>
     <div id="tools" class="float"></div>
     <div id="tip"></div>
-    <div style="display:none"><input type="file" id="file" accept=".stl,.step,.stp" multiple><button id="rotZ"></button><button id="cube"></button><button id="dup"></button><button id="del"></button><button id="arrange"></button><button id="open"></button></div>
+    <div style="display:none"><input type="file" id="file" accept=".stl,.step,.stp,.3mf" multiple><button id="rotZ"></button><button id="cube"></button><button id="dup"></button><button id="del"></button><button id="arrange"></button><button id="open"></button></div>
     <canvas id="vcube" width="240" height="240"></canvas>
     <div id="vround">
       <button id="vHome" data-tip="Reset view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg></button>
@@ -13417,6 +13417,72 @@ function parseSTL(buf) {
   while ((m = re.exec(txt))) v.push(+m[1], +m[2], +m[3]);
   return new Float32Array(v);
 }
+
+// ---- 3MF import (Bambu / Orca / any 3MF project): every build item becomes its own object
+async function unzipEntries(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), out = {};
+  let e = buf.byteLength - 22;
+  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('not a zip / 3MF file');
+  let n = dv.getUint16(e + 10, true), p = dv.getUint32(e + 16, true);
+  for (let i = 0; i < n; i++) {
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lo = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+    p += 46 + nl + xl + cl;
+    if (!/\.model$/i.test(name)) continue;
+    const start = lo + 30 + dv.getUint16(lo + 26, true) + dv.getUint16(lo + 28, true), data = u8.subarray(start, start + csize);
+    if (method === 0) out[name.replace(/^\/?/, '/')] = new TextDecoder().decode(data);
+    else if (method === 8) {
+      const ds = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      out[name.replace(/^\/?/, '/')] = await new Response(ds).text();
+    }
+  }
+  return out;
+}
+function m3mf(t) {
+  if (!t) return [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
+  const v = t.trim().split(/\s+/).map(Number);
+  return v.length === 12 ? v : [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
+}
+function mmul3mf(a, b) {   // apply a then b
+  const r = new Array(12);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) {
+    r[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j] + (i === 3 ? b[9 + j] : 0);
+  }
+  return r;
+}
+async function parse3MF(buf) {
+  status('Reading 3MF…');
+  const files = await unzipEntries(buf), docs = {}, X = new DOMParser();
+  const doc = (path) => docs[path] || (docs[path] = files[path] ? X.parseFromString(files[path], 'application/xml') : null);
+  const root = Object.keys(files).find((k) => /^\/3D\/3dmodel\.model$/i.test(k)) || Object.keys(files)[0];
+  if (!root) throw new Error('no 3D model inside this 3MF');
+  const byTag = (el, tag) => Array.from(el.getElementsByTagName('*')).filter((x) => x.localName === tag);
+  const findObj = (path, id) => { const d = doc(path); return d && byTag(d, 'object').find((o) => o.getAttribute('id') === id); };
+  function collect(path, obj, mat, out, depth) {
+    if (!obj || depth > 8) return;
+    const mesh = byTag(obj, 'mesh')[0];
+    if (mesh) {
+      const vs = byTag(mesh, 'vertex').map((v) => [+v.getAttribute('x'), +v.getAttribute('y'), +v.getAttribute('z')]);
+      const P = vs.map(([x, y, z]) => [x * mat[0] + y * mat[3] + z * mat[6] + mat[9], x * mat[1] + y * mat[4] + z * mat[7] + mat[10], x * mat[2] + y * mat[5] + z * mat[8] + mat[11]]);
+      for (const t of byTag(mesh, 'triangle')) for (const k of ['v1', 'v2', 'v3']) { const q = P[+t.getAttribute(k)]; if (q) out.push(q[0], q[1], q[2]); }
+    }
+    for (const c of byTag(obj, 'component')) {
+      if (c.parentNode !== byTag(obj, 'components')[0]) continue;
+      const cp = c.getAttribute('p:path') || c.getAttributeNS('http://schemas.microsoft.com/3dmanufacturing/production/2015/06', 'path') || path;
+      const cpath = cp.replace(/^\/?/, '/');
+      collect(cpath, findObj(cpath, c.getAttribute('objectid')), mmul3mf(m3mf(c.getAttribute('transform')), mat), out, depth + 1);
+    }
+  }
+  const d = doc(root), items = byTag(d, 'item'), res = [];
+  for (const it of items) {
+    const o = findObj(root, it.getAttribute('objectid')), out = [];
+    collect(root, o, m3mf(it.getAttribute('transform')), out, 0);
+    if (out.length) res.push({ name: (o && o.getAttribute('name')) || '', tris: new Float32Array(out) });
+  }
+  return res;
+}
 let occtPromise = null;
 function loadOcct() { // the STEP reader (OpenCASCADE via occt-import-js) is embedded in this file
   if (!occtPromise) occtPromise = occtimportjs({ wasmBinary: b64bytes('occtWasm').buffer }).catch((e) => { occtPromise = null; throw e; });
@@ -13491,7 +13557,7 @@ function updateMeshes() {
   $('drop').style.display = objects.length ? 'none' : 'flex';
   const fits = objects.every(fitsPlate);
   $('slice').disabled = !objects.length || !fits;
-  status(objects.length ? `${objects.length} object(s) · ${objects.reduce((a, o) => a + o.tris.length / 9, 0).toLocaleString()} triangles${fits ? '' : ' · an object is outside the plate'}` : 'Drop STL or STEP files to start');
+  status(objects.length ? `${objects.length} object(s) · ${objects.reduce((a, o) => a + o.tris.length / 9, 0).toLocaleString()} triangles${fits ? '' : ' · an object is outside the plate'}` : 'Drop STL, STEP or 3MF files to start');
 }
 function select(i) {
   sel = i; updateMeshes(); renderObjects(); updateObjPanel();
@@ -13600,6 +13666,13 @@ addEventListener('keydown', (e) => {
 async function loadFile(f) {
   try {
     const buf = await f.arrayBuffer(), step = /\.(step|stp)$/i.test(f.name);
+    if (/\.3mf$/i.test(f.name)) {
+      const parts = await parse3MF(buf), base = f.name.replace(/(\.gcode)?\.3mf$/i, '');
+      if (!parts.length) return status('Could not read ' + f.name + ' (no model inside)');
+      parts.forEach((q, i) => addObject(q.name || (parts.length > 1 ? base + '_' + (i + 1) : base), q.tris));
+      arrange(true);
+      return;
+    }
     const tris = step ? await parseSTEP(buf) : parseSTL(buf);
     if (!tris.length) return status('Could not read ' + f.name);
     addObject(f.name.replace(/\.(stl|step|stp)$/i, ''), tris);
